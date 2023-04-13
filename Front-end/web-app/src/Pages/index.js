@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Service  from "../Services/Service";
 
 function Index() {
     const navigate = useNavigate();
@@ -20,7 +21,7 @@ function Index() {
 
     const handleFileRead =(e) =>{
         const content = fileReader.result
-      //  alert(content)
+       // alert(content)
         setValue(content)
         //miEditor.current.editor.setValue(content)
         //miEditor.current.editor.clearSelection()
@@ -29,12 +30,20 @@ function Index() {
     const handleChangeFile = (event) => {
         setFile(event.target.files[0])
        
-    }
+    };
 
     const handleChangeValue = (event) => {
         setValue(event.target.value);
         // alert(value)
-      }
+      };
+
+    const handleSubmitComand = (event) => {
+      event.preventDefault()
+      Service.test()
+      .then(({nombre}) => {
+        alert(nombre)
+    })
+    };
   return (
     <>
     <nav class="navbar bg-dark" data-bs-theme="dark">
@@ -50,15 +59,27 @@ function Index() {
     </div>
   </nav>
    <br></br> 
+   <div class="px-5">
   <form onSubmit={handleSubmitFile}>
           <input type="file" accept=".eea" onChange={handleChangeFile}  />
           <button type="submit" class="btn btn-warning">Cargar</button>
   </form>
+  </div>
 <br></br>
-  <div class="mb-3 px-5">
   
-  <textarea class="form-control" id="editor" rows="10" defaultValue={ value } onChange={handleChangeValue}></textarea>
+  <div class="mb-3 px-5">
+  <form onSubmit={handleSubmitComand }>
+  <textarea class="form-control" id="editor" rows="10" value={ value } onChange={handleChangeValue}></textarea>
+  <button type="submit" class="btn btn-success">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-play-fill" viewBox="0 0 16 16">
+  <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+  </svg> 
+  Ejecutar
+  </button>
+  </form>
+  
  </div>
+
   </>
   );
 }
