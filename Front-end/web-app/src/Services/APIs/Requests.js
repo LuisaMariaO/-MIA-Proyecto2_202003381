@@ -14,3 +14,8 @@ export const test = async(value) =>{
     const { data } = await instance.get("/info", { peticion: value })
     return data
 }
+
+export const postCode = async(value) =>{
+    const { data } = await instance.post("/postCode", { comando: value })
+    return data
+}
