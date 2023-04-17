@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"net/http/httputil"
+	"proyecto2/analizador"
+	"strings"
 )
 
 type ResponseInfo struct {
@@ -20,7 +24,12 @@ type ResponseResult struct {
 	Result string `json:"result"`
 }
 
-func handler1(w http.ResponseWriter, _ *http.Request) {
+func handler1(w http.ResponseWriter, r *http.Request) {
+	reqDump, err := httputil.DumpRequest(r, true)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("REQUEST:\n%s", string(reqDump))
 	fmt.Fprintf(w, "Hello from Golang!!!")
 }
 
@@ -39,6 +48,12 @@ func handleInfo(w http.ResponseWriter, _ *http.Request) {
 }
 
 func handleCode(w http.ResponseWriter, r *http.Request) {
+	//reqDump, err := httputil.DumpRequest(r, true)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+
+	//fmt.Printf("REQUEST:\n%s", string(reqDump))
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -47,9 +62,16 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	var variable Code
 	json.Unmarshal([]byte(string(body)), &variable)
 	//fmt.Printf("Species: %s", variable.Comando)
-	fmt.Print(variable.Comando)
+	var consola string = ""
+	if len(variable.Comando) >= 1 { //Porque a veces llegan peticiones vacías desde la app :c
+		lineas := strings.Split(variable.Comando, "\n") //Separo por salto de línea pues cada comando es una línea diferente
+		consola = analizador.Analizar(lineas)
+	} else {
+		consola = ""
+	}
 
-	resp := ResponseResult{"Hola, soy el resultado"}
+	resp := ResponseResult{consola}
+
 	jsonResp, err := json.Marshal(resp)
 	if err != nil {
 		fmt.Printf("Error happened in JSON marshal. Err: %s", err)
@@ -57,9 +79,17 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonResp)
 }
 
+func Prueba() {
+	fmt.Println("Que pasaaa")
+}
+
+func doNothing(w http.ResponseWriter, r *http.Request) {}
+
 func main() {
+
 	http.HandleFunc("/", handler1)
 	http.HandleFunc("/info", handleInfo)
 	http.HandleFunc("/postCode", handleCode)
+	http.HandleFunc("/favicon.ico", doNothing)
 	http.ListenAndServe(":8000", nil)
 }

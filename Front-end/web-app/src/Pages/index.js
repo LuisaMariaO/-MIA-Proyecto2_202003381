@@ -8,7 +8,7 @@ function Index() {
 
     const [file, setFile] = useState(); //Archivo actual que será leído
     const [value, setValue] = useState("");
-    const [console, setConsole] = useState("");
+    const [consolee, setConsolee] = useState("");
 
     const handleSubmitFile = (event) =>{
         event.preventDefault()
@@ -39,11 +39,15 @@ function Index() {
       };
 
     const handleSubmitComand = (event) => {
-      event.preventDefault()
+      event.preventDefault();
       Service.postCode(value)
       .then(({result}) => {
-        setConsole(result)
-    })
+        
+        setConsolee(result);
+        console.log(result)
+      
+    });
+    
     };
   return (
     <>
@@ -82,7 +86,7 @@ function Index() {
  </div>
 
  <div class="mb3 px-5">
- <textarea class="form-control bg-dark" id="editor" rows="10" value={ console } readOnly={true} style={{color:"#FFFFFF"}}></textarea>
+ <textarea class="form-control bg-dark" id="editor" rows="10" value={ consolee } readOnly={true} style={{color:"#FFFFFF"}}></textarea>
  </div>
 
   </>
