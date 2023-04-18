@@ -2,3 +2,5 @@ mkdisk >Size=3000 >unit=K >path=/home/luisa/Disco1.dsk
 mkdisk >path=/home/luisa/Disco2.dsk >Unit=K >size=3000
 mkdisk >size=5 >unit=M >path="/home/luisa/mis discos/Disco3.dsk"
 mkdisk >size=10 >path="/home/luisa/mis discos/Disco4.dsk"
+
+rmdisk >path="/home/luisa/mis discos/Disco4.dsk"

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 // This func must be Exported, Capitalized, and comment added.
@@ -41,7 +40,7 @@ func espacioCadena(comando string) string {
 }
 
 func getTipoValor(parametro string) (string, string) {
-	fmt.Println(parametro)
+	//fmt.Println(parametro)
 	if parametro[0] == '#' {
 		return parametro, "" //Si es un comentario, retorno el mismo comando
 	}
@@ -71,7 +70,7 @@ func verifyDirectory(ruta string) {
 func crearArchivoB(ruta string, tamano int, unit byte) bool {
 
 	var buffer [1024]byte
-	fmt.Println(ruta)
+	//fmt.Println(ruta)
 	file, err := os.Create(ruta)
 	if err != nil {
 		consola += "Error al crear el archivo binario\n"
@@ -184,7 +183,7 @@ func mkdisk(parametros []string) {
 		copy(mbr.Mbr_fecha_creacion[:], []byte(fecha))
 		seed := rand.New(rand.NewSource(time.Now().UnixNano()))
 		mbr.Mbr_dsk_signature = seed.Int31n(100000)
-		fmt.Println(unsafe.Sizeof(mbr))
+		//fmt.Println(unsafe.Sizeof(mbr))
 
 		if crearArchivoB(path, size, unit) {
 			file, err := os.OpenFile(path, os.O_RDWR, 0777)
@@ -204,6 +203,35 @@ func mkdisk(parametros []string) {
 	}
 }
 
+func removeFile(path string) {
+	e := os.Remove(path)
+	if e != nil {
+		consola += "Error: No se encontró el archivo a eliminar\n"
+		return
+	}
+	consola += "¡Disco eliminado con éxito!\n"
+}
+
+func rmdisk(parametros []string) {
+	var path string
+
+	for len(parametros) > 0 {
+		tmp := parametros[0]
+		tipo, valor := getTipoValor(tmp)
+
+		if tipo == ">path" {
+			valor = regresarEspacio(valor)
+			path = valor
+		} else if tipo[0] == '#' {
+			break
+		} else {
+			consola += "Error: Parámetro <" + valor + "> no válido\n"
+		}
+		parametros = parametros[1:]
+	}
+	removeFile(path)
+}
+
 func Analizar(lineas []string) string {
 	consola = "" //Reestableciendo la consola cada vez que se llama a analizar
 	for _, linea := range lineas {
@@ -214,6 +242,9 @@ func Analizar(lineas []string) string {
 			//Elimino el primer elemento (el nombre del comando)
 			params = params[1:]
 			mkdisk(params)
+		} else if strings.EqualFold(params[0], "rmdisk") {
+			params = params[1:]
+			rmdisk(params)
 		} else if params[0][0] == '#' {
 			//Si es un comentario, no pasa nada
 		} else {
