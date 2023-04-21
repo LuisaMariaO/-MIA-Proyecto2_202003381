@@ -40,3 +40,8 @@ fdisk >type=P >unit=M >name=Part4 >size=25 >path=/home/luisa/tmp/d3.dsk  >fit=BF
 fdisk >type=P >unit=M >name=Part1 >size=25 >path=/home/luisa/tmp/d3.dsk  >fit=BF
 fdisk >type=L >unit=K >name=Part5 >size=1024 >path=/home/luisa/tmp/d3.dsk  >fit=BF
 fdisk >type=L >unit=K >name=Part6 >size=1024 >path=/home/luisa/tmp/d3.dsk  >fit=BF
+
+#MOUNT
+mount >path=/home/luisa/tmp/d1.dsk >name=Part1 #811A
+mount >path=/home/luisa/tmp/d2.dsk >name=Part1 #812A
+mount >path=/home/luisa/tmp/d3.dsk >name=Part1 #812A

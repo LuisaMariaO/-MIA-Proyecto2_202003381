@@ -17,7 +17,20 @@ func Holis() {
 	fmt.Println("Holis :3")
 }
 
+type Atributos struct {
+	ruta     string
+	nombre   [16]byte
+	inicio   int
+	tamano   int
+	tipo     byte
+	numDisco int
+}
+
 var consola string
+
+/*<id,atributos>*/
+var montadas = make(map[string]Atributos)
+var ultDisco = 0
 
 func espacioCadena(comando string) string {
 	var cadena bool = false
@@ -632,6 +645,138 @@ func fdisk(parametros []string) {
 	}
 }
 
+func montarParticion(ruta string, name [16]byte) {
+	var atributos Atributos
+	atributos.nombre = name
+	atributos.ruta = ruta
+	encontrada := false
+	file, err := os.Open(ruta)
+	if err != nil {
+		consola += "Error: No se puede abrir el disco duro\n"
+	}
+	defer file.Close()
+	file.Seek(0, 0) //Coloco el puntero al inicio para obtener el mbr
+	var mbr MBR
+	binary.Read(file, binary.LittleEndian, &mbr)
+
+	//Primero verifico que exista la partición
+	for i := 0; i < 4; i++ {
+		if name == mbr.Mbr_partition[i].Part_name {
+			encontrada = true
+			atributos.inicio = int(mbr.Mbr_partition[i].Part_start)
+			atributos.tamano = int(mbr.Mbr_partition[i].Part_size)
+			atributos.tipo = mbr.Mbr_partition[i].Part_type
+			break
+		}
+		if mbr.Mbr_partition[i].Part_type == 'E' { //Si es extendida, reviso en las particiones lógicas
+			var tmp EBR
+			file.Seek(int64(mbr.Mbr_partition[i].Part_start), 0) //Inicio de la partición extendida
+			binary.Read(file, binary.LittleEndian, &tmp)
+
+			if name == tmp.Part_name {
+				encontrada = true
+				atributos.inicio = int(tmp.Part_start)
+				atributos.tamano = int(tmp.Part_size) - int(unsafe.Sizeof(tmp)) //Le resto el ebr porque ese espacio no se usa para guardar archivos y carpetas
+				atributos.tipo = 'L'
+				break
+			}
+			for tmp.Part_next != -1 {
+				if name == tmp.Part_name {
+					encontrada = true
+					atributos.inicio = int(tmp.Part_start)
+					atributos.tamano = int(tmp.Part_size) - int(unsafe.Sizeof(tmp))
+					atributos.tipo = 'L'
+					break
+				}
+				file.Seek(int64(tmp.Part_next), 0)
+				binary.Read(file, binary.LittleEndian, &tmp)
+
+				if tmp.Part_next == -1 {
+					if name == tmp.Part_name {
+						encontrada = true
+						atributos.inicio = int(tmp.Part_start)
+						atributos.tamano = int(tmp.Part_size) - int(unsafe.Sizeof(tmp))
+						atributos.tipo = 'L'
+						break
+					}
+				}
+			}
+
+		}
+	}
+	if encontrada {
+		//Carner 202003381
+		id := "81"
+		numero := 0
+		asci := 65
+
+		for _, part := range montadas {
+			if part.ruta == ruta {
+				numero = part.numDisco
+				atributos.numDisco = part.numDisco
+				break
+			}
+		}
+		if numero == 0 {
+			//Si el número sigue siendo 0, entonces no se ha montado ninguna partición del disco, se crea un nuevo número
+			ultDisco++
+			numero, atributos.numDisco = ultDisco, ultDisco
+
+		}
+		id += strconv.Itoa(numero)
+		for _, part := range montadas {
+			if part.ruta == ruta {
+				asci++
+			}
+		}
+		id += string(rune(asci)) //Convierto a string según el número ascii
+		/*TODO: Agregar código para última vez de montaje eb particiones formateadas*/
+		montadas[id] = atributos
+		consola += "¡Partición <" + string(name[:]) + "> montada! ID: " + id + "\n"
+
+	} else {
+		consola += "Error: No se encontró la partición\n"
+	}
+
+}
+func mount(parametros []string) {
+	fpath, fname := false, false
+	var path string
+	var name [16]byte
+
+	for len(parametros) > 0 {
+		tmp := parametros[0]
+		tipo, valor := getTipoValor(tmp)
+
+		if tipo == ">path" {
+			valor = regresarEspacio(valor)
+			if existsFile(valor) {
+				path = valor
+				fpath = true
+			} else {
+				consola += "Error: No se encontró el disco duro\n"
+				break
+			}
+		} else if tipo == ">name" {
+			valor = regresarEspacio(valor)
+			copy(name[:], []byte(valor))
+			fname = true
+
+		} else if tipo[0] == '#' {
+			break
+		} else {
+			consola += "Parámetro <" + valor + "> no válido\n"
+		}
+
+		parametros = parametros[1:] //Elimino el parámetro analizado
+	}
+
+	if fname && fpath {
+		montarParticion(path, name)
+	} else {
+		consola += "Error: Faltan parámetros obligatorios\n"
+	}
+}
 func Analizar(lineas []string) string {
 	consola = "" //Reestableciendo la consola cada vez que se llama a analizar
 	for _, linea := range lineas {
@@ -656,6 +801,9 @@ func Analizar(lineas []string) string {
 		} else if strings.EqualFold(params[0], "fdisk") {
 			params = params[1:]
 			fdisk(params)
+		} else if strings.EqualFold(params[0], "mount") {
+			params = params[1:]
+			mount(params)
 		} else if params[0][0] == '#' {
 
 			//Si es un comentario, no pasa nada
