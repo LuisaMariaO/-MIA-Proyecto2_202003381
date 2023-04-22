@@ -44,4 +44,9 @@ fdisk >type=L >unit=K >name=Part6 >size=1024 >path=/home/luisa/tmp/d3.dsk  >fit=
 #MOUNT
 mount >path=/home/luisa/tmp/d1.dsk >name=Part1 #811A
 mount >path=/home/luisa/tmp/d2.dsk >name=Part1 #812A
-mount >path=/home/luisa/tmp/d3.dsk >name=Part1 #812A
+mount >path=/home/luisa/tmp/d3.dsk >name=Part1 #813A
+
+#REPORTES
+rep >id=811A >path=/home/luisa/parte1/particiones/d1.jpg >name=disk 
+rep >id=812A >path=/home/luisa/parte1/particiones/d2.jpg >name=disk
+rep >id=813A >path=/home/luisa/parte1/particiones/d3.jpg >name=disk

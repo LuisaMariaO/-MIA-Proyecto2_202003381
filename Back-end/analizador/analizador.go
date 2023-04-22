@@ -3,8 +3,10 @@ package analizador
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -440,7 +442,7 @@ func ajustarL(ruta string, size int, name [16]byte, fit byte) {
 		binary.Read(file, binary.LittleEndian, &tmp)
 
 		file.Seek(int64(ext.Part_start), 0)
-		binary.Read(file, binary.LittleEndian, &tmp)
+		binary.Read(file, binary.LittleEndian, &ultimo)
 
 		ocupado += int(tmp.Part_size)
 
@@ -680,7 +682,9 @@ func montarParticion(ruta string, name [16]byte) {
 				atributos.tipo = 'L'
 				break
 			}
+
 			for tmp.Part_next != -1 {
+
 				if name == tmp.Part_name {
 					encontrada = true
 					atributos.inicio = int(tmp.Part_start)
@@ -777,8 +781,250 @@ func mount(parametros []string) {
 		consola += "Error: Faltan parámetros obligatorios\n"
 	}
 }
+
+func getPathWName(ruta string) string {
+	dir := filepath.Dir(ruta)
+	return dir
+}
+func getFileName(ruta string) string {
+	name := filepath.Base(ruta)
+	return strings.TrimSuffix(name, filepath.Ext(name))
+}
+
+func dotToPng(path string, name string) {
+	res := exec.Command("dot", "-Tpng", name+".dot", "-o", name+".jpg")
+	res.Dir = "/home/luisa/parte1/particiones"
+
+	stdout, err := res.Output()
+
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
+
+	// Print the output
+	fmt.Println(string(stdout))
+
+}
+
+func repDisk(ruta string, id string) {
+	colorMbr := "\"#39F91A\""
+	colorParticion := "\"#7E1DF2\""
+	colorEbr := "\"#F927A9\""
+	colorEbrInfo := "\"#FA96D4\""
+	colorLibre := "\"#D3D3D3\""
+	graficar := false
+
+	var mbr MBR
+	var vacio Atributos
+	//Primero reviso si la partición está montada
+	if montadas[id] != vacio {
+		graficar = true
+	} else {
+		consola += "Error: No se encontró el id <" + id + ">\n"
+	}
+
+	if graficar {
+		rutaDot := getPathWName(ruta)
+		rutaDot += "/" + getFileName(ruta) + ".dot"
+
+		file, err := os.Create(rutaDot)
+		if err != nil {
+			consola += "Error: No se pudo crear el archivo\n"
+			return
+		}
+
+		fileb, err := os.Open(montadas[id].ruta)
+		if err != nil {
+			consola += "Error: No se puede leer el disco duro\n"
+		}
+
+		fileb.Seek(0, 0) //Coloco el puntero al inicio para obtener el mbr
+		binary.Read(fileb, binary.LittleEndian, &mbr)
+
+		dot := ""
+		dot += "digraph G {\n"
+		dot += "a0[shape=none label=<\n"
+		dot += "<TABLE cellspacing=\"1\" cellpadding=\"0\">\n"
+		dot += "<TR>\n"
+		dot += "<TD bgcolor="
+		dot += colorMbr
+		dot += "> MBR </TD>\n"
+		porcentaje, libre := 0, 0
+		var calc float64
+		ocupado := 0
+
+		for i := 0; i < 4; i++ {
+			ocupado += int(mbr.Mbr_partition[i].Part_size)
+			if mbr.Mbr_partition[i].Part_type == 'E' && mbr.Mbr_partition[i].Part_status == '1' {
+				//Si es extendida y está activa, reviso las lógicas
+
+				dot += "<TD>\n"
+				dot += "\n"
+				dot += "<TABLE cellspacing=\"1\" cellpadding=\"0\">\n"
+				dot += "<TR>\n"
+				dot += "<TD color=\"#FFFFFF\">Extendida</TD>\n"
+				dot += "</TR>\n"
+
+				var tmp EBR
+				fileb.Seek(int64(mbr.Mbr_partition[i].Part_start), 0)
+				binary.Read(fileb, binary.LittleEndian, &tmp)
+
+				if tmp.Part_next == -1 {
+					dot += "<TR>\n"
+					dot += "<TD bgcolor=" + colorEbr + ">EBR</TD>\n"
+
+					libre = int(mbr.Mbr_partition[i].Part_size)
+
+					calc = 1 * float64(libre)
+					calc = calc / float64(mbr.Mbr_tamano)
+					calc *= 100
+					porcentaje = int(math.Round(calc))
+					if libre > 0 {
+						dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+					}
+
+				} else {
+					dot += "<TR>\n"
+				}
+				/*
+					scanner := bufio.NewScanner(os.Stdin)
+				*/
+				for tmp.Part_next != -1 {
+
+					//scanner.Scan()
+					dot += "<TD bgcolor=" + colorEbr + ">EBR</TD>\n"
+					calc = float64(tmp.Part_size) * 1
+					calc = calc / float64(mbr.Mbr_tamano)
+					calc *= 100
+					porcentaje = int(math.Round(calc))
+					dot += "<TD bgcolor=" + colorEbrInfo + ">Lógica <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+
+					fileb.Seek(int64(tmp.Part_next), 0)
+					binary.Read(fileb, binary.LittleEndian, &tmp)
+
+					if tmp.Part_next == -1 {
+						//Código para graficar la última partición lógica
+						dot += "<TD bgcolor=" + colorEbr + ">EBR</TD>\n"
+						calc = float64(tmp.Part_size) * 1
+						calc = calc / float64(mbr.Mbr_tamano)
+						calc *= 100
+						porcentaje = int(math.Round(calc))
+						dot += "<TD bgcolor=" + colorEbrInfo + ">Lógica <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+
+						//Ahora reviso si hay espacio libre al final de la extendida
+						libre = (int(mbr.Mbr_partition[i].Part_start) + int(mbr.Mbr_partition[i].Part_size)) - (int(tmp.Part_start) + int(tmp.Part_size))
+
+						calc = float64(libre) * 1
+						calc = calc / float64(mbr.Mbr_tamano)
+						calc *= 100
+						porcentaje = int(math.Round(calc))
+						if libre > 0 {
+							dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+						}
+					}
+				}
+				dot += "</TR>\n"
+				dot += "</TABLE>\n"
+				dot += "</TD>\n"
+			} else {
+				if mbr.Mbr_partition[i].Part_status == '0' {
+					//Partición que no está siendo usada
+					libre = int(mbr.Mbr_partition[i].Part_size)
+					calc = float64(libre) * 1
+					calc = calc / float64(mbr.Mbr_tamano)
+					calc *= 100
+					porcentaje = int(math.Round(calc))
+
+					dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+				} else {
+					calc = float64(mbr.Mbr_partition[i].Part_size) * 1
+					calc = calc / float64(mbr.Mbr_tamano)
+					calc *= 100
+					porcentaje = int(math.Round(calc))
+
+					dot += "<TD bgcolor=" + colorParticion + ">Primaria <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+				}
+			}
+		}
+		//Espacio libre al final del disco
+		libre = int(mbr.Mbr_tamano) - (ocupado)
+		if libre > 0 {
+			calc = float64(libre) * 1
+			calc = calc / float64(mbr.Mbr_tamano)
+			calc *= 100
+			porcentaje = int(math.Round(calc))
+
+			dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+		}
+
+		dot += "</TR>\n"
+		dot += "</TABLE>\n"
+		dot += ">]\n"
+		dot += "label=\"" + getFileName(montadas[id].ruta) + ".dsk\""
+		dot += "}\n"
+
+		file.WriteString(dot)
+		file.Close()
+		fileb.Close()
+		nombreA := getFileName(ruta)
+		rutaA := getPathWName(ruta)
+		/*
+			comando := "dot -Tjpg "
+			comando += rutaDot
+			comando += " -o "
+			comando += rutaA
+			comando += "/"
+			comando += nombreA
+			comando += ".jpg"*/
+		dotToPng(rutaA, nombreA)
+
+		consola += "¡Reporte generado con éxito!\n"
+	}
+
+}
+
+func rep(parametros []string) {
+	fname, fpath, fid, fruta := false, false, false, false
+
+	var name, path, id, ruta string
+	for len(parametros) > 0 {
+		tmp := parametros[0]
+		tipo, valor := getTipoValor(tmp)
+		if tipo == ">name" {
+			name = valor
+			fname = true
+		} else if tipo == ">path" {
+			valor = regresarEspacio(valor)
+			verifyDirectory(valor)
+			path = valor
+			fpath = true
+		} else if tipo == ">id" {
+			id = valor
+			fid = true
+		} else if tipo == ">ruta" {
+			valor = regresarEspacio(valor)
+			ruta = valor
+			fruta = true
+		} else if tipo[0] == '#' {
+			break
+		} else {
+			consola += "Parámetro <" + valor + "> no válido\n"
+		}
+		parametros = parametros[1:]
+	}
+	if fname && fpath && fid {
+		if strings.EqualFold(name, "disk") {
+			repDisk(path, id)
+		}
+	} else {
+		fmt.Println(ruta, fruta)
+		consola += "Error: Faltan parámetros obligatorios\n"
+	}
+}
 func Analizar(lineas []string) string {
 	consola = "" //Reestableciendo la consola cada vez que se llama a analizar
+
 	for _, linea := range lineas {
 		if len(linea) < 5 {
 			continue //Si la línea solo incluye un salto de línea
@@ -804,6 +1050,9 @@ func Analizar(lineas []string) string {
 		} else if strings.EqualFold(params[0], "mount") {
 			params = params[1:]
 			mount(params)
+		} else if strings.EqualFold(params[0], "rep") {
+			params = params[1:]
+			rep(params)
 		} else if params[0][0] == '#' {
 
 			//Si es un comentario, no pasa nada
