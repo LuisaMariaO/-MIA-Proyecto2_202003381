@@ -736,6 +736,20 @@ func montarParticion(ruta string, name [16]byte) {
 		id += string(rune(asci)) //Convierto a string según el número ascii
 		/*TODO: Agregar código para última vez de montaje eb particiones formateadas*/
 		montadas[id] = atributos
+		/*Si la partición ya fue formateada, actualizo la última fecha de montaje*/
+		file.Seek(int64(atributos.inicio), 0) //Me muevo al inicio de la partición
+		var superbloque SuperBloque
+		binary.Read(file, binary.LittleEndian, &superbloque)
+		if superbloque.S_filesystem_type != 0 {
+			t := time.Now()
+			fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+				t.Year(), t.Month(), t.Day(),
+				t.Hour(), t.Minute(), t.Second())
+			copy(superbloque.S_mtime[:], []byte(fecha))
+			superbloque.S_mnt_count++
+			file.Seek(int64(atributos.inicio), 0)
+			binary.Write(file, binary.LittleEndian, &superbloque) //Escribo el superbloque con la información actualizada
+		}
 		consola += "¡Partición <" + string(name[:]) + "> montada! ID: " + id + "\n"
 
 	} else {
@@ -1024,6 +1038,135 @@ func rep(parametros []string) {
 }
 
 func formatear(id string) {
+	encontrada := false
+	var vacio, particion Atributos
+	if montadas[id] != vacio {
+		encontrada = true
+		particion = montadas[id]
+	} else {
+		consola += "Error: Id de partición <" + id + "> no encontrado\n"
+	}
+
+	if encontrada {
+		file, err := os.Open(particion.ruta)
+		if err != nil {
+			consola += "Error: No se puede abrir el disco duro\n"
+		}
+		defer file.Close()
+
+		var n, bloques, inodos int
+		var n_numerador, n_denominador, inodos_parcial float64
+		var superbloque SuperBloque
+
+		n_numerador = float64(particion.tamano) - float64(unsafe.Sizeof(superbloque))
+		n_denominador = 4 + float64(unsafe.Sizeof(Inodo{})) + (3 * float64(unsafe.Sizeof(BloqueArchivos{})))
+		n_numerador /= n_denominador
+		n = int(n_numerador)
+
+		inodos_parcial = float64(n / 4)
+		inodos = int(inodos_parcial)
+
+		bloques = 3 * inodos
+
+		//Creo la carpeta raiz y el archivo users.txt
+		//Inodo carpeta
+		var raiz Inodo
+		raiz.I_uid = 1
+		raiz.I_gid = 1
+		raiz.I_size = 27
+		t := time.Now()
+		fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+			t.Year(), t.Month(), t.Day(),
+			t.Hour(), t.Minute(), t.Second())
+		copy(raiz.I_ctime[:], []byte(fecha))
+		copy(raiz.I_mtime[:], []byte(fecha))
+		raiz.I_type = '0' //Tipo carpeta
+		raiz.I_perm = 664
+
+		//Bloque carpeta
+		var bloquecarpeta BloqueCarpetas
+		copy(bloquecarpeta.B_content[0].B_name[:], "/")
+		copy(bloquecarpeta.B_content[1].B_name[:], "/")
+		copy(bloquecarpeta.B_content[2].B_name[:], "users.txt")
+
+		//Inodo de archivo
+		var archivo Inodo
+		archivo.I_uid = 1
+		archivo.I_gid = 1
+		archivo.I_size = 37
+		t = time.Now()
+		fecha = fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
+			t.Year(), t.Month(), t.Day(),
+			t.Hour(), t.Minute(), t.Second())
+		copy(archivo.I_ctime[:], []byte(fecha))
+		copy(archivo.I_mtime[:], []byte(fecha))
+		archivo.I_type = '1' //Tipo archivo
+		archivo.I_perm = 664
+
+		//Asocio el inodo raiz con el bloque de carpeta
+		raiz.I_block[0] = int32(particion.inicio) + int32(unsafe.Sizeof(superbloque)) + int32(inodos) + int32(bloques) + int32((int32(inodos) * int32(unsafe.Sizeof(Inodo{})))) //Posición del primer bloque
+		//Asocio el bloque de carpeta con el inodo de archivo+
+		bloquecarpeta.B_content[2].B_inodo = int32(particion.inicio) + int32(unsafe.Sizeof(superbloque)) + int32(inodos) + int32(bloques) + int32(unsafe.Sizeof(Inodo{}))
+
+		//Escribo el contenido de users.txt
+		var barchivo BloqueArchivos
+		copy(barchivo.B_content[:], "1,G,root\n1,U,root,root,123\n")
+
+		//Asocio el inodo de archivo con el bloque de archivo
+		archivo.I_block[0] = int32(particion.inicio) + int32(unsafe.Sizeof(superbloque)) + int32(inodos) + int32(bloques) + int32((int32(inodos) * int32(unsafe.Sizeof(Inodo{})))) + int32(unsafe.Sizeof(BloqueArchivos{}))
+
+		//Agrego los atributos del superbloque
+		superbloque.S_filesystem_type = 2
+		superbloque.S_inodes_count = int32(inodos)
+		superbloque.S_blocks_count = int32(bloques)
+		superbloque.S_free_inodes_count = int32(inodos) - 2
+		superbloque.S_free_blocks_count = int32(bloques) - 2
+		superbloque.S_magic = 0xEF53
+		superbloque.S_block_size = int32(unsafe.Sizeof(BloqueArchivos{}))
+		superbloque.S_inode_size = int32(unsafe.Sizeof(Inodo{}))
+		superbloque.S_first_ino = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos) + int32(bloques) + int32(int32(2)*int32(unsafe.Sizeof(Inodo{})))
+		superbloque.S_first_blo = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos) + int32(bloques) + int32(int32(inodos)*int32(unsafe.Sizeof(Inodo{}))) + int32(int32(2)*int32(unsafe.Sizeof(BloqueArchivos{})))
+		superbloque.S_bm_inode_start = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{}))
+		superbloque.S_bm_block_start = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos)
+		superbloque.S_inode_start = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos) + int32(bloques)
+		superbloque.S_block_start = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos) + int32(bloques) + int32(int32(inodos)*int32(unsafe.Sizeof(Inodo{})))
+
+		/*Escribiendo las estructuras en el archivo*/
+		file.Seek(int64(particion.inicio), 0)
+		//Al inicio de la partición va el superbloque
+		binary.Write(file, binary.LittleEndian, &superbloque)
+		var cero, uno byte = '0', '1'
+		//Bitmap de inodos
+		file.Seek(int64(superbloque.S_bm_inode_start), 0)
+		binary.Write(file, binary.LittleEndian, &uno) //Ya se escribieron dos inodos
+		binary.Write(file, binary.LittleEndian, &uno)
+		//Ahora los 0s
+		for i := 2; i < inodos; i++ {
+			binary.Write(file, binary.LittleEndian, &cero)
+		}
+
+		//Bitmap de bloques
+		file.Seek(int64(superbloque.S_bm_block_start), 0)
+		binary.Write(file, binary.LittleEndian, &uno) //Ya se escribieron dos inodos
+		binary.Write(file, binary.LittleEndian, &uno)
+		//Ahora los 0s
+		for i := 2; i < bloques; i++ {
+			binary.Write(file, binary.LittleEndian, &cero)
+		}
+
+		//Escribo los inodos creados
+		file.Seek(int64(superbloque.S_inode_start), 0)
+		binary.Write(file, binary.LittleEndian, &raiz)
+		binary.Write(file, binary.LittleEndian, &archivo)
+
+		//Escribo los bloques creados
+		file.Seek(int64(superbloque.S_block_start), 0)
+		binary.Write(file, binary.LittleEndian, &bloquecarpeta)
+		binary.Write(file, binary.LittleEndian, &barchivo)
+
+		consola += "¡Partición formateada con el sistema de archivos EXT2!\n"
+
+	}
 
 }
 func mkfs(parametros []string) {

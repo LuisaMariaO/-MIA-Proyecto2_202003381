@@ -47,7 +47,7 @@ type SuperBloque struct {
 type Inodo struct {
 	I_uid   int32     //UID del usuario propietario del archivo o carpeta
 	I_gid   int32     //GID del grupo al que pertenece el archivo o carpeta
-	I_size  int32     //Tamaño del archivo em bytes
+	I_size  int32     //Tamaño del archivo en bytes
 	I_atime [30]byte  //Última fecha en que se leyó el inodo sin modificarlo
 	I_ctime [30]byte  //Fecha en que se creó el inodo
 	I_mtime [30]byte  //Última fecha en que se modifica el inodo
