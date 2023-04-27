@@ -1022,6 +1022,41 @@ func rep(parametros []string) {
 		consola += "Error: Faltan parámetros obligatorios\n"
 	}
 }
+
+func formatear(id string) {
+
+}
+func mkfs(parametros []string) {
+	fid := false
+	var id string
+	for len(parametros) > 0 {
+		tmp := parametros[0]
+		tipo, valor := getTipoValor(tmp)
+		if tipo == ">id" {
+			valor = regresarEspacio(valor)
+			id = valor
+			fid = true
+		} else if tipo == ">type" {
+			if strings.EqualFold(valor, "full") {
+				//ftype=true
+			} else {
+				consola += "Error: Valor para >type <" + valor + "> inválido\n"
+			}
+		} else if tipo[0] == '#' {
+			break
+		} else {
+			consola += "Error: Parámetro <" + valor + "> no válido\n"
+		}
+		parametros = parametros[1:]
+	}
+
+	if fid {
+		formatear(id)
+
+	} else {
+		consola += "Error: Parámetros insuficientes para realizar una acción\n"
+	}
+}
 func Analizar(lineas []string) string {
 	consola = "" //Reestableciendo la consola cada vez que se llama a analizar
 
@@ -1053,6 +1088,9 @@ func Analizar(lineas []string) string {
 		} else if strings.EqualFold(params[0], "rep") {
 			params = params[1:]
 			rep(params)
+		} else if strings.EqualFold(params[0], "mkfs") {
+			params = params[1:]
+			mkfs(params)
 		} else if params[0][0] == '#' {
 
 			//Si es un comentario, no pasa nada
