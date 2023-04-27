@@ -50,3 +50,28 @@ mount >path=/home/luisa/tmp/d3.dsk >name=Part1 #813A
 rep >id=811A >path=/home/luisa/parte1/particiones/d1.jpg >name=disk 
 rep >id=812A >path=/home/luisa/parte1/particiones/d2.jpg >name=disk
 rep >id=813A >path=/home/luisa/parte1/particiones/d3.jpg >name=disk
+
+#-----------------
+# Parte 2 - SISTEMA DE ARCHIVOS
+#----------------
+
+#CONFIGURACION INICIAL
+mkdisk >size=112 >unit=M >path=/home/luisa/parte2/disco.dsk
+
+fdisk >type=P >unit=M >name=Part1 >size=25 >path=/home/luisa/parte2/disco.dsk
+fdisk >type=P >unit=M >name=Part2 >size=25 >path=/home/luisa/parte2/disco.dsk
+fdisk >type=P >unit=M >name=Part3 >size=25 >path=/home/luisa/parte2/disco.dsk
+fdisk >type=P >unit=M >name=Part4 >size=25 >path=/home/luisa/parte2/disco.dsk
+
+mount >path=/home/luisa/parte2/disco.dsk >name=Part1 #id 811A
+mount >path=/home/luisa/parte2/disco.dsk >name=Part2 #id 811B
+mount >path=/home/luisa/parte2/disco.dsk >name=Part3 #id 811C
+mount >path=/home/luisa/parte2/disco.dsk >name=Part4 #id 811D
+
+#MKFS A PARTICIONES
+mkfs >type=full >id=811A
+mkfs >type=full >id=811B
+
+rep >id=811A >path="/home/luisa/parte2/inicial/ext2_sb_1.png" >name=sb
+
+rep >id=811B >path="/home/luisa/parte2/inicial/ext3_sb_1.png" >name=sb

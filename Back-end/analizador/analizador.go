@@ -807,7 +807,7 @@ func getFileName(ruta string) string {
 
 func dotToPng(path string, name string) {
 	res := exec.Command("dot", "-Tpng", name+".dot", "-o", name+".jpg")
-	res.Dir = "/home/luisa/parte1/particiones"
+	res.Dir = path
 
 	stdout, err := res.Output()
 
@@ -998,6 +998,153 @@ func repDisk(ruta string, id string) {
 
 }
 
+func repSb(ruta string, id string) {
+	colorSb, colorSbInfo := "\"#FF8B00\"", "\"#FEB358\""
+	graficar := false
+
+	var superbloque SuperBloque
+	var vacio Atributos
+	//Primero reviso si la partición está montada
+	if montadas[id] != vacio {
+		graficar = true
+	} else {
+		consola += "Error: No se encontró el id <" + id + ">\n"
+	}
+
+	if graficar {
+		rutaDot := getPathWName(ruta)
+		rutaDot += "/" + getFileName(ruta) + ".dot"
+
+		file, err := os.Create(rutaDot)
+		if err != nil {
+			consola += "Error: No se pudo crear el archivo\n"
+			return
+		}
+
+		fileb, err := os.Open(montadas[id].ruta)
+		if err != nil {
+			consola += "Error: No se puede leer el disco duro\n"
+		}
+
+		fileb.Seek(int64(montadas[id].inicio), 0) //Coloco el puntero al inicio de la partición para leer el superbloque
+		binary.Read(fileb, binary.LittleEndian, &superbloque)
+
+		dot := ""
+		dot += "digraph G {\n"
+		dot += "a0[shape=none label=<\n"
+		dot += "<TABLE cellspacing=\"0\" cellpadding=\"0\">\n"
+		dot += "<TR>\n"
+		dot += "<TD bgcolor="
+		dot += colorSb
+		dot += "> REPORTE DE SUPERBLOQUE</TD>\n"
+		dot += "<TD bgcolor="
+		dot += colorSb
+		dot += "></TD>\n"
+		dot += "</TR>\n"
+		//Comienzo con la información del superbloque
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_filesystem_type</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_filesystem_type)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_inodes_count</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_inodes_count)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_blocks_count</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_blocks_count)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_free_blocks_count</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_free_blocks_count)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_free_inodes_count</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_free_inodes_count)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		var s_mtime []byte
+
+		for _, char := range superbloque.S_mtime {
+			if char != 0 {
+				s_mtime = append(s_mtime, char)
+			}
+		}
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_mtime</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + string(s_mtime[:]) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_mnt_count</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_mnt_count)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_magic</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_magic)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_inode_s</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_inode_size)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_block_s</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_block_size)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_first_ino</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_first_ino)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_first_block</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_first_blo)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_bm_inode_start</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_bm_inode_start)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_bm_block_start</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_bm_block_start)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_inode_start</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_inode_start)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "<TR>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">s_block_start</TD>\n"
+		dot += "<TD bgcolor=" + colorSbInfo + ">" + strconv.Itoa(int(superbloque.S_block_start)) + "</TD>\n"
+		dot += "</TR>\n"
+
+		dot += "</TABLE>\n"
+		dot += ">]\n"
+		dot += "}\n"
+
+		file.WriteString(dot)
+		file.Close()
+		fileb.Close()
+		nombreA := getFileName(ruta)
+		rutaA := getPathWName(ruta)
+		dotToPng(rutaA, nombreA)
+
+		consola += "¡Reporte generado con éxito!\n"
+
+	}
+}
+
 func rep(parametros []string) {
 	fname, fpath, fid, fruta := false, false, false, false
 
@@ -1023,13 +1170,15 @@ func rep(parametros []string) {
 		} else if tipo[0] == '#' {
 			break
 		} else {
-			consola += "Parámetro <" + valor + "> no válido\n"
+			consola += "Error: Parámetro <" + valor + "> no válido\n"
 		}
 		parametros = parametros[1:]
 	}
 	if fname && fpath && fid {
 		if strings.EqualFold(name, "disk") {
 			repDisk(path, id)
+		} else if strings.EqualFold(name, "sb") {
+			repSb(path, id)
 		}
 	} else {
 		fmt.Println(ruta, fruta)
@@ -1048,7 +1197,8 @@ func formatear(id string) {
 	}
 
 	if encontrada {
-		file, err := os.Open(particion.ruta)
+
+		file, err := os.OpenFile(particion.ruta, os.O_RDWR, 0777)
 		if err != nil {
 			consola += "Error: No se puede abrir el disco duro\n"
 		}
@@ -1110,7 +1260,7 @@ func formatear(id string) {
 
 		//Escribo el contenido de users.txt
 		var barchivo BloqueArchivos
-		copy(barchivo.B_content[:], "1,G,root\n1,U,root,root,123\n")
+		copy(barchivo.B_content[:], []byte("1,G,root\n1,U,root,root,123\n"))
 
 		//Asocio el inodo de archivo con el bloque de archivo
 		archivo.I_block[0] = int32(particion.inicio) + int32(unsafe.Sizeof(superbloque)) + int32(inodos) + int32(bloques) + int32((int32(inodos) * int32(unsafe.Sizeof(Inodo{})))) + int32(unsafe.Sizeof(BloqueArchivos{}))
@@ -1121,6 +1271,7 @@ func formatear(id string) {
 		superbloque.S_blocks_count = int32(bloques)
 		superbloque.S_free_inodes_count = int32(inodos) - 2
 		superbloque.S_free_blocks_count = int32(bloques) - 2
+		copy(superbloque.S_mtime[:], []byte("0000-00-00T00:00:00"))
 		superbloque.S_magic = 0xEF53
 		superbloque.S_block_size = int32(unsafe.Sizeof(BloqueArchivos{}))
 		superbloque.S_inode_size = int32(unsafe.Sizeof(Inodo{}))
