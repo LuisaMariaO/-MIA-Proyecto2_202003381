@@ -57,6 +57,23 @@ function Index() {
       event.preventDefault();
       setValue("")
     };
+
+    const handleLogout = (event)=>{
+      event.preventDefault();
+      Service.logout()
+      .then(({status, message}) => {
+        if(status!=null){
+          if (status==48){
+            alert(message)
+          }else{
+            alert("¡Sesión cerrada!")
+          }
+        }else{
+          alert("Ocurrió un error de conexión")
+        }
+      
+    });
+    };
   return (
     <>
     <nav class="navbar bg-dark" data-bs-theme="dark">
@@ -66,8 +83,8 @@ function Index() {
         MIA Proyecto2
       </a>
       <div class="btn-group" role="group" aria-label="Basic example">
-      <button class="btn btn-outline-success" type="button">Login</button>
-      <button class="btn btn-outline-danger" type="button">Logout</button>
+      <button class="btn btn-outline-success" type="button" onClick={()=>navigate('/login')}>Login</button>
+      <button class="btn btn-outline-danger" type="button" onClick={ handleLogout }>Logout</button>
       </div>
     </div>
   </nav>

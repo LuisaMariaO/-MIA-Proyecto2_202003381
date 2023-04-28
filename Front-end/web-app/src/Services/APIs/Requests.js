@@ -19,3 +19,13 @@ export const postCode = async(value) =>{
     const { data } = await instance.post("/postCode", { comando: value })
     return data
 }
+
+export const login = async(idr, userr, passwordr) =>{
+    const { data } = await instance.post("/login", { id:idr, user:userr, password:passwordr })
+    return data
+}
+
+export const logout = async() =>{
+    const { data } = await instance.post("/logout")
+    return data
+}

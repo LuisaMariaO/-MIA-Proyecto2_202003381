@@ -23,6 +23,15 @@ type Code struct {
 type ResponseResult struct {
 	Result string `json:"result"`
 }
+type ResponseLogin struct {
+	Status  byte   `json:"status"`
+	Message string `json:"message"`
+}
+type LoginBody struct {
+	Id       string `json:"id"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+}
 
 func handler1(w http.ResponseWriter, r *http.Request) {
 	reqDump, err := httputil.DumpRequest(r, true)
@@ -79,6 +88,50 @@ func handleCode(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonResp)
 }
 
+func handleLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	body, _ := ioutil.ReadAll(r.Body)
+
+	var variable LoginBody
+	json.Unmarshal([]byte(string(body)), &variable)
+	var resp ResponseLogin
+	if len(variable.Id) >= 1 { //Porque a veces llegan peticiones vacías desde la app :c
+		resp.Status, resp.Message = analizador.IniciarSesion(variable.User, variable.Password, variable.Id)
+
+	} else {
+
+	}
+
+	//resp := ResponseResult{consola}
+
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
+		fmt.Printf("Error happened in JSON marshal. Err: %s", err)
+	}
+	w.Write(jsonResp)
+
+}
+
+func handleLogout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	var resp ResponseLogin
+	resp.Status, resp.Message = analizador.Logout()
+
+	//resp := ResponseResult{consola}
+
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
+		fmt.Printf("Error happened in JSON marshal. Err: %s", err)
+	}
+	w.Write(jsonResp)
+}
+
 func Prueba() {
 	fmt.Println("Que pasaaa")
 }
@@ -90,6 +143,8 @@ func main() {
 	http.HandleFunc("/", handler1)
 	http.HandleFunc("/info", handleInfo)
 	http.HandleFunc("/postCode", handleCode)
+	http.HandleFunc("/login", handleLogin)
+	http.HandleFunc("/logout", handleLogout)
 	http.HandleFunc("/favicon.ico", doNothing)
 	http.ListenAndServe(":8000", nil)
 }

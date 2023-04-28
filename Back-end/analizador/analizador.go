@@ -1975,7 +1975,7 @@ func mkfs(parametros []string) {
 	}
 }
 
-func iniciarSesion(user string, pass string, id string) (byte, string) {
+func IniciarSesion(user string, pass string, id string) (byte, string) {
 	if !logged {
 		encontrado := false //usuario
 		var agrupo, auser, apass, auid string
@@ -1987,6 +1987,7 @@ func iniciarSesion(user string, pass string, id string) (byte, string) {
 			particion = montadas[id]
 		} else {
 			consola += "Error: Id de partición <" + id + "> no encontrado\n"
+			return '0', "Id de partición <" + id + "> no encontrado"
 		}
 
 		if encontrada {
@@ -2110,13 +2111,13 @@ func login(parametros []string) {
 	}
 
 	if fid && fuser && fpass {
-		iniciarSesion(user, pass, id)
+		IniciarSesion(user, pass, id)
 	} else {
 		consola += "Error: Faltan parámetros obligatorios\n"
 	}
 }
 
-func logout() (byte, string) {
+func Logout() (byte, string) {
 	if logged {
 		userLog = ""
 		idLog = ""
@@ -2168,7 +2169,7 @@ func Analizar(lineas []string) string {
 			params = params[1:]
 			login(params)
 		} else if strings.EqualFold(params[0], "logout") {
-			logout()
+			Logout()
 		} else if params[0][0] == '#' {
 
 			//Si es un comentario, no pasa nada

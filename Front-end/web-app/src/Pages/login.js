@@ -4,48 +4,40 @@ import Service  from "../Services/Service";
 
 function Login() {
     const navigate = useNavigate();
-    let fileReader; //Lectura del archivo
+    
 
-    const [file, setFile] = useState(); //Archivo actual que será leído
-    const [value, setValue] = useState("");
-    const [consolee, setConsolee] = useState("");
+    const [id, setId] = useState(""); 
+    const [user, setUser] = useState("");
+    const [password, setPassword] = useState("");
 
-    const handleSubmitFile = (event) =>{
-        event.preventDefault()
-        event.target.reset();
-        fileReader = new FileReader()
-        fileReader.onloadend = handleFileRead;
-        fileReader.readAsText(file)
-        
 
+
+    const handleChangeId = (event) => {
+        setId(event.target.value)
+    };
+    const handleChageUser = (event) => {
+      setUser(event.target.value) 
+    };
+  const handleChangePassword = (event) => {
+    setPassword(event.target.value)
     };
 
-    const handleFileRead =(e) =>{
-        const content = fileReader.result
-       // alert(content)
-        setValue(content)
-        //miEditor.current.editor.setValue(content)
-        //miEditor.current.editor.clearSelection()
-    };
-
-    const handleChangeFile = (event) => {
-        setFile(event.target.files[0])
-       
-    };
-
-    const handleChangeValue = (event) => {
-        setValue(event.target.value);
-        // alert(value)
-      };
-
-    const handleSubmitComand = (event) => {
+    const handleSubmit = (event) => {
       event.preventDefault();
-      setConsolee("Cargando...")
-      Service.postCode(value)
-      .then(({result}) => {
-        
-        setConsolee(result);
-        console.log(result)
+      //setConsolee("Cargando...")
+      Service.login(id,user,password)
+      .then(({status,message}) => {
+        if(status!=null){
+        if (status==48){
+          alert(message)
+          navigate('/')
+        }else{
+          alert("¡Sesión iniciada!")
+          navigate('/')
+        }
+      }else{
+        alert("Ocurrió un error de comunicación :(")
+      }
       
     });
 
@@ -53,28 +45,25 @@ function Login() {
     
     };
 
-    const handleClean = (event) =>{
-      event.preventDefault();
-      setValue("")
-    };
+  
   return (
     <>
     <div class="container">
         <div class="row py-5">
             <h3>Login</h3>
             <div class="col px-5 py-5 bg-success border border-success-subtle rounded-3" >
-            <form>
+            <form onSubmit={handleSubmit}>
   <div class="mb-3">
     <label for="id" class="form-label">ID Partición</label>
-    <input type="text" class="form-control" id="id" required/>
+    <input type="text" class="form-control" id="id" onChange={handleChangeId} required={true}/>
   </div>
   <div class="mb-3">
     <label for="user" class="form-label">User</label>
-    <input type="text" class="form-control" id="user" required/>
+    <input type="text" class="form-control" id="user" required onChange={handleChageUser}/>
   </div>
   <div class="mb-3">
     <label for="password" class="form-label">Password</label>
-    <input type="password" class="form-control" id="password" required/>
+    <input type="password" class="form-control" id="password" required onChange={handleChangePassword}/>
   </div>
   <button type="submit" class="btn btn-warning">Ingresar</button>
 </form>
