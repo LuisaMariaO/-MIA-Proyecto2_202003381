@@ -28,6 +28,7 @@ type Atributos struct {
 	numDisco int
 }
 
+/*Variables globales*/
 var consola string
 
 /*<id,atributos>*/
@@ -35,6 +36,9 @@ var montadas = make(map[string]Atributos)
 var ultDisco = 0
 
 var arbol, conexiones = "", ""
+
+var userLog, uidLog, idLog, gidLog string
+var logged bool = false
 
 func espacioCadena(comando string) string {
 	var cadena bool = false
@@ -1970,6 +1974,162 @@ func mkfs(parametros []string) {
 		consola += "Error: Parámetros insuficientes para realizar una acción\n"
 	}
 }
+
+func iniciarSesion(user string, pass string, id string) (byte, string) {
+	if !logged {
+		encontrado := false //usuario
+		var agrupo, auser, apass, auid string
+
+		encontrada := false //Partición
+		var vacio, particion Atributos
+		if montadas[id] != vacio {
+			encontrada = true
+			particion = montadas[id]
+		} else {
+			consola += "Error: Id de partición <" + id + "> no encontrado\n"
+		}
+
+		if encontrada {
+			file, err := os.OpenFile(particion.ruta, os.O_RDWR, 0777)
+			if err != nil {
+				consola += "Error: No se puede abrir el disco duro\n"
+			}
+			defer file.Close()
+
+			var inodo Inodo
+			var barchivo BloqueArchivos
+			var superbloque SuperBloque
+			//Me muevo al inicio de la partición
+			file.Seek(int64(particion.inicio), 0)
+			binary.Read(file, binary.BigEndian, &superbloque)
+
+			//Busco el inodo de users.txt, el cuál es el segundo inodo del bitmap
+			file.Seek((int64(superbloque.S_inode_start) + int64(unsafe.Sizeof(Inodo{}))), 0)
+			binary.Read(file, binary.BigEndian, &inodo)
+			var lineas []string
+			var contenido []byte
+
+			for i := 0; i <= 15; i++ {
+				if inodo.I_block[i] != 0 { //Si está ocupado
+					file.Seek(int64(inodo.I_block[i]), 0)
+					binary.Read(file, binary.BigEndian, &barchivo)
+					/*Guardo los usuarios que puedan haber en todos los bloques de archivo del inodo*/
+					for _, char := range barchivo.B_content {
+						if char != 0 {
+							contenido = append(contenido, char)
+						}
+					}
+					//Separando por líneas
+
+				}
+			}
+
+			lineas = strings.Split(string(contenido[:]), "\n")
+			lineas = lineas[:len(lineas)-1] //Por el salto de línea al final, elimino el último elemento
+			for len(lineas) > 0 {
+				linea := strings.Split(lineas[0], ",")
+				for len(linea) > 0 {
+					auid = linea[0]
+					linea = linea[1:]
+
+					if linea[0] == "G" {
+						//Estoy leyendo un grupo, así que me salto a otra línea
+						linea = nil
+					} else {
+						linea = linea[1:]
+						//Leo el grupo
+						agrupo = linea[0]
+						linea = linea[1:]
+						//Leo el usuario
+						auser = linea[0]
+						linea = linea[1:]
+						//Leo la contraseña
+						apass = linea[0]
+
+						if auser == user && apass == pass {
+							//Se inicia sesión
+							encontrado = true
+							uidLog = auid
+							idLog = id
+							userLog = user
+							gidLog = agrupo
+
+						}
+						linea = nil
+
+					}
+
+				}
+				if encontrado {
+					break
+				}
+				lineas = lineas[1:]
+			}
+
+			if encontrado {
+				logged = true
+				consola += "¡Sesión iniciada con éxito!\n"
+				return '1', ""
+			} else {
+				consola += "Error: Usuario o contraseña incorrectos\n"
+				return '0', "Error: Usuario o contraseña incorrectos"
+			}
+		}
+
+	} else {
+		consola += "Error: Ya existe una sesión iniciada"
+		return '0', "Error: Ya existe una sesión iniciada"
+	}
+	return '0', ""
+}
+
+func login(parametros []string) {
+	fuser, fpass, fid := false, false, false
+	var user, pass, id string
+	for len(parametros) > 0 {
+		tmp := parametros[0]
+		tipo, valor := getTipoValor(tmp)
+		if tipo == ">id" {
+			valor = regresarEspacio(valor)
+			id = valor
+			fid = true
+		} else if tipo == ">pwd" {
+			valor = regresarEspacio(valor)
+			pass = valor
+			fpass = true
+		} else if tipo == ">user" {
+			valor = regresarEspacio(valor)
+			user = valor
+			fuser = true
+		} else if tipo[0] == '#' {
+			break
+		} else {
+			consola += "Error: Parámetro <" + valor + "> no válido\n"
+		}
+		parametros = parametros[1:]
+	}
+
+	if fid && fuser && fpass {
+		iniciarSesion(user, pass, id)
+	} else {
+		consola += "Error: Faltan parámetros obligatorios\n"
+	}
+}
+
+func logout() (byte, string) {
+	if logged {
+		userLog = ""
+		idLog = ""
+		gidLog = ""
+		uidLog = ""
+		logged = false
+		consola += "¡Sesión Cerrada!"
+		return '1', ""
+	} else {
+		consola += "Error: No existe una sesión iniciada\n"
+		return '0', "Error: No existe una sesión iniciada\n"
+	}
+}
 func Analizar(lineas []string) string {
 	consola = "" //Reestableciendo la consola cada vez que se llama a analizar
 	//fmt.Println(unsafe.Sizeof(MBR{}))
@@ -2004,6 +2164,11 @@ func Analizar(lineas []string) string {
 		} else if strings.EqualFold(params[0], "mkfs") {
 			params = params[1:]
 			mkfs(params)
+		} else if strings.EqualFold(params[0], "login") {
+			params = params[1:]
+			login(params)
+		} else if strings.EqualFold(params[0], "logout") {
+			logout()
 		} else if params[0][0] == '#' {
 
 			//Si es un comentario, no pasa nada
