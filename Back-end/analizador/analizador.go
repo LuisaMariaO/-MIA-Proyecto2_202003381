@@ -34,6 +34,8 @@ var consola string
 var montadas = make(map[string]Atributos)
 var ultDisco = 0
 
+var arbol, conexiones = "", ""
+
 func espacioCadena(comando string) string {
 	var cadena bool = false
 	a := []byte(comando)
@@ -98,7 +100,7 @@ func crearArchivoB(ruta string, tamano int, unit byte) bool {
 
 	if unit == 'k' {
 		for i := 0; i < tamano; i++ {
-			err = binary.Write(file, binary.LittleEndian, &buffer)
+			err = binary.Write(file, binary.BigEndian, &buffer)
 			if err != nil {
 				consola += "Error al escribir en el archivo binario\n"
 				return false
@@ -106,7 +108,7 @@ func crearArchivoB(ruta string, tamano int, unit byte) bool {
 		}
 	} else {
 		for i := 0; i < (tamano * 1024); i++ {
-			err = binary.Write(file, binary.LittleEndian, &buffer)
+			err = binary.Write(file, binary.BigEndian, &buffer)
 			if err != nil {
 				consola += "Error al escribir en el archivo binario\n"
 				return false
@@ -215,7 +217,7 @@ func mkdisk(parametros []string) {
 			}
 			defer file.Close()
 			file.Seek(0, 0)
-			binary.Write(file, binary.LittleEndian, &mbr)
+			binary.Write(file, binary.BigEndian, &mbr)
 			consola += "¡Disco creado con éxito!\n"
 		}
 
@@ -271,7 +273,7 @@ func ajustarP(ruta string, size int, name [16]byte, fit byte) {
 
 	file.Seek(0, 0)
 	var mbr MBR
-	binary.Read(file, binary.LittleEndian, &mbr)
+	binary.Read(file, binary.BigEndian, &mbr)
 
 	//Inicializando parámetros
 	var particion Partition
@@ -320,7 +322,7 @@ func ajustarP(ruta string, size int, name [16]byte, fit byte) {
 		consola += "¡Partición Primaria <" + string(name[:]) + "> creada!\n"
 
 		file.Seek(0, 0)
-		binary.Write(file, binary.LittleEndian, &mbr)
+		binary.Write(file, binary.BigEndian, &mbr)
 	}
 }
 func ajustarE(ruta string, size int, name [16]byte, fit byte) {
@@ -333,7 +335,7 @@ func ajustarE(ruta string, size int, name [16]byte, fit byte) {
 
 	file.Seek(0, 0)
 	var mbr MBR
-	binary.Read(file, binary.LittleEndian, &mbr)
+	binary.Read(file, binary.BigEndian, &mbr)
 
 	//Inicializando parámetros
 	var particion Partition
@@ -386,7 +388,7 @@ func ajustarE(ruta string, size int, name [16]byte, fit byte) {
 		particion.Part_start = int32(ocupado)
 		mbr.Mbr_partition[pos] = particion
 		file.Seek(0, 0)
-		binary.Write(file, binary.LittleEndian, &mbr) //Escribiendo el mbr actualizado
+		binary.Write(file, binary.BigEndian, &mbr) //Escribiendo el mbr actualizado
 
 		var ebr EBR
 		ebr.Part_status = '0'
@@ -396,7 +398,7 @@ func ajustarE(ruta string, size int, name [16]byte, fit byte) {
 		ebr.Part_next = -1
 
 		file.Seek(int64(particion.Part_start), 0)
-		binary.Write(file, binary.LittleEndian, &ebr)
+		binary.Write(file, binary.BigEndian, &ebr)
 
 		consola += "¡Partición extendida <" + string(name[:]) + "> creada!\n"
 	}
@@ -413,7 +415,7 @@ func ajustarL(ruta string, size int, name [16]byte, fit byte) {
 
 	file.Seek(0, 0)
 	var mbr MBR
-	binary.Read(file, binary.LittleEndian, &mbr)
+	binary.Read(file, binary.BigEndian, &mbr)
 
 	var ext Partition
 
@@ -439,10 +441,10 @@ func ajustarL(ruta string, size int, name [16]byte, fit byte) {
 		var tmp, ultimo EBR
 
 		file.Seek(int64(ext.Part_start), 0)
-		binary.Read(file, binary.LittleEndian, &tmp)
+		binary.Read(file, binary.BigEndian, &tmp)
 
 		file.Seek(int64(ext.Part_start), 0)
-		binary.Read(file, binary.LittleEndian, &ultimo)
+		binary.Read(file, binary.BigEndian, &ultimo)
 
 		ocupado += int(tmp.Part_size)
 
@@ -452,7 +454,7 @@ func ajustarL(ruta string, size int, name [16]byte, fit byte) {
 				//Si cabe en la partición extendida
 				logica.Part_start = ext.Part_start
 				file.Seek(int64(ext.Part_start), 0) //Para actualizar el ebr
-				binary.Write(file, binary.LittleEndian, &logica)
+				binary.Write(file, binary.BigEndian, &logica)
 				consola += "¡Partición lógica <" + string(logica.Part_name[:]) + "> creada!\n"
 			} else {
 				consola += "Error: Espacio insuficiente en la partición extendida\n"
@@ -460,7 +462,7 @@ func ajustarL(ruta string, size int, name [16]byte, fit byte) {
 		} else {
 			for tmp.Part_next != -1 {
 				file.Seek(int64(tmp.Part_next), 0)
-				binary.Read(file, binary.LittleEndian, &tmp)
+				binary.Read(file, binary.BigEndian, &tmp)
 				ocupado += int(tmp.Part_size)
 				if tmp.Part_next == -1 {
 					//Se encontró otro ebr
@@ -474,10 +476,10 @@ func ajustarL(ruta string, size int, name [16]byte, fit byte) {
 				ultimo.Part_next = logica.Part_start                     //Apuntador del anterior a la nueva
 				//Actualizo el anterior
 				file.Seek(int64(ultimo.Part_start), 0)
-				binary.Write(file, binary.LittleEndian, &ultimo)
+				binary.Write(file, binary.BigEndian, &ultimo)
 				//Escribo el nuevo
 				file.Seek(int64(logica.Part_start), 0)
-				binary.Write(file, binary.LittleEndian, &logica)
+				binary.Write(file, binary.BigEndian, &logica)
 				consola += "¡Partición lógica <" + string(name[:]) + "> creada!\n"
 			} else {
 				consola += "Error: Espacio insuficiente en la partición extendida\n"
@@ -497,7 +499,7 @@ func ajustar(ruta string, size int, unit byte, name [16]byte, typep byte, fit by
 	defer file.Close()
 	file.Seek(0, 0) //Coloco el puntero al inicio para obtener el mbr
 	var mbr MBR
-	binary.Read(file, binary.LittleEndian, &mbr)
+	binary.Read(file, binary.BigEndian, &mbr)
 
 	//Primero verifico que no se repita el nombre de la partición en el disco
 	for i := 0; i < 4; i++ {
@@ -509,7 +511,7 @@ func ajustar(ruta string, size int, unit byte, name [16]byte, typep byte, fit by
 		if mbr.Mbr_partition[i].Part_type == 'E' { //Si es extendida, reviso en las particiones lógicas
 			var tmp EBR
 			file.Seek(int64(mbr.Mbr_partition[i].Part_start), 0) //Inicio de la partición extendida
-			binary.Read(file, binary.LittleEndian, &tmp)
+			binary.Read(file, binary.BigEndian, &tmp)
 
 			if name == tmp.Part_name {
 				consola += "Error: Ya existe una partición llamada <" + string(name[:]) + ">\n"
@@ -523,7 +525,7 @@ func ajustar(ruta string, size int, unit byte, name [16]byte, typep byte, fit by
 					break
 				}
 				file.Seek(int64(tmp.Part_next), 0)
-				binary.Read(file, binary.LittleEndian, &tmp)
+				binary.Read(file, binary.BigEndian, &tmp)
 
 				if tmp.Part_next == -1 {
 					if name == tmp.Part_name {
@@ -659,7 +661,7 @@ func montarParticion(ruta string, name [16]byte) {
 	defer file.Close()
 	file.Seek(0, 0) //Coloco el puntero al inicio para obtener el mbr
 	var mbr MBR
-	binary.Read(file, binary.LittleEndian, &mbr)
+	binary.Read(file, binary.BigEndian, &mbr)
 
 	//Primero verifico que exista la partición
 	for i := 0; i < 4; i++ {
@@ -673,7 +675,7 @@ func montarParticion(ruta string, name [16]byte) {
 		if mbr.Mbr_partition[i].Part_type == 'E' { //Si es extendida, reviso en las particiones lógicas
 			var tmp EBR
 			file.Seek(int64(mbr.Mbr_partition[i].Part_start), 0) //Inicio de la partición extendida
-			binary.Read(file, binary.LittleEndian, &tmp)
+			binary.Read(file, binary.BigEndian, &tmp)
 
 			if name == tmp.Part_name {
 				encontrada = true
@@ -693,7 +695,7 @@ func montarParticion(ruta string, name [16]byte) {
 					break
 				}
 				file.Seek(int64(tmp.Part_next), 0)
-				binary.Read(file, binary.LittleEndian, &tmp)
+				binary.Read(file, binary.BigEndian, &tmp)
 
 				if tmp.Part_next == -1 {
 					if name == tmp.Part_name {
@@ -727,7 +729,7 @@ func montarParticion(ruta string, name [16]byte) {
 			numero, atributos.numDisco = ultDisco, ultDisco
 
 		}
-		id += strconv.Itoa(numero)
+		id += strconv.Itoa(int(numero))
 		for _, part := range montadas {
 			if part.ruta == ruta {
 				asci++
@@ -739,7 +741,7 @@ func montarParticion(ruta string, name [16]byte) {
 		/*Si la partición ya fue formateada, actualizo la última fecha de montaje*/
 		file.Seek(int64(atributos.inicio), 0) //Me muevo al inicio de la partición
 		var superbloque SuperBloque
-		binary.Read(file, binary.LittleEndian, &superbloque)
+		binary.Read(file, binary.BigEndian, &superbloque)
 		if superbloque.S_filesystem_type != 0 {
 			t := time.Now()
 			fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
@@ -748,7 +750,7 @@ func montarParticion(ruta string, name [16]byte) {
 			copy(superbloque.S_mtime[:], []byte(fecha))
 			superbloque.S_mnt_count++
 			file.Seek(int64(atributos.inicio), 0)
-			binary.Write(file, binary.LittleEndian, &superbloque) //Escribo el superbloque con la información actualizada
+			binary.Write(file, binary.BigEndian, &superbloque) //Escribo el superbloque con la información actualizada
 		}
 		consola += "¡Partición <" + string(name[:]) + "> montada! ID: " + id + "\n"
 
@@ -854,7 +856,7 @@ func repDisk(ruta string, id string) {
 		}
 
 		fileb.Seek(0, 0) //Coloco el puntero al inicio para obtener el mbr
-		binary.Read(fileb, binary.LittleEndian, &mbr)
+		binary.Read(fileb, binary.BigEndian, &mbr)
 
 		dot := ""
 		dot += "digraph G {\n"
@@ -882,7 +884,7 @@ func repDisk(ruta string, id string) {
 
 				var tmp EBR
 				fileb.Seek(int64(mbr.Mbr_partition[i].Part_start), 0)
-				binary.Read(fileb, binary.LittleEndian, &tmp)
+				binary.Read(fileb, binary.BigEndian, &tmp)
 
 				if tmp.Part_next == -1 {
 					dot += "<TR>\n"
@@ -895,7 +897,7 @@ func repDisk(ruta string, id string) {
 					calc *= 100
 					porcentaje = int(math.Round(calc))
 					if libre > 0 {
-						dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+						dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(int(porcentaje)) + "% del disco</TD>\n"
 					}
 
 				} else {
@@ -912,10 +914,10 @@ func repDisk(ruta string, id string) {
 					calc = calc / float64(mbr.Mbr_tamano)
 					calc *= 100
 					porcentaje = int(math.Round(calc))
-					dot += "<TD bgcolor=" + colorEbrInfo + ">Lógica <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+					dot += "<TD bgcolor=" + colorEbrInfo + ">Lógica <BR></BR> " + strconv.Itoa(int(porcentaje)) + "% del disco</TD>\n"
 
 					fileb.Seek(int64(tmp.Part_next), 0)
-					binary.Read(fileb, binary.LittleEndian, &tmp)
+					binary.Read(fileb, binary.BigEndian, &tmp)
 
 					if tmp.Part_next == -1 {
 						//Código para graficar la última partición lógica
@@ -924,7 +926,7 @@ func repDisk(ruta string, id string) {
 						calc = calc / float64(mbr.Mbr_tamano)
 						calc *= 100
 						porcentaje = int(math.Round(calc))
-						dot += "<TD bgcolor=" + colorEbrInfo + ">Lógica <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+						dot += "<TD bgcolor=" + colorEbrInfo + ">Lógica <BR></BR> " + strconv.Itoa(int(porcentaje)) + "% del disco</TD>\n"
 
 						//Ahora reviso si hay espacio libre al final de la extendida
 						libre = (int(mbr.Mbr_partition[i].Part_start) + int(mbr.Mbr_partition[i].Part_size)) - (int(tmp.Part_start) + int(tmp.Part_size))
@@ -934,7 +936,7 @@ func repDisk(ruta string, id string) {
 						calc *= 100
 						porcentaje = int(math.Round(calc))
 						if libre > 0 {
-							dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+							dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(int(porcentaje)) + "% del disco</TD>\n"
 						}
 					}
 				}
@@ -950,14 +952,14 @@ func repDisk(ruta string, id string) {
 					calc *= 100
 					porcentaje = int(math.Round(calc))
 
-					dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+					dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(int(porcentaje)) + "% del disco</TD>\n"
 				} else {
 					calc = float64(mbr.Mbr_partition[i].Part_size) * 1
 					calc = calc / float64(mbr.Mbr_tamano)
 					calc *= 100
 					porcentaje = int(math.Round(calc))
 
-					dot += "<TD bgcolor=" + colorParticion + ">Primaria <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+					dot += "<TD bgcolor=" + colorParticion + ">Primaria <BR></BR> " + strconv.Itoa(int(porcentaje)) + "% del disco</TD>\n"
 				}
 			}
 		}
@@ -969,7 +971,7 @@ func repDisk(ruta string, id string) {
 			calc *= 100
 			porcentaje = int(math.Round(calc))
 
-			dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(porcentaje) + "% del disco</TD>\n"
+			dot += "<TD bgcolor=" + colorLibre + ">Libre <BR></BR> " + strconv.Itoa(int(porcentaje)) + "% del disco</TD>\n"
 		}
 
 		dot += "</TR>\n"
@@ -1027,7 +1029,7 @@ func repSb(ruta string, id string) {
 		}
 
 		fileb.Seek(int64(montadas[id].inicio), 0) //Coloco el puntero al inicio de la partición para leer el superbloque
-		binary.Read(fileb, binary.LittleEndian, &superbloque)
+		binary.Read(fileb, binary.BigEndian, &superbloque)
 
 		dot := ""
 		dot += "digraph G {\n"
@@ -1145,6 +1147,608 @@ func repSb(ruta string, id string) {
 	}
 }
 
+func repTree(ruta string, id string) {
+	graficar := false
+
+	var superbloque SuperBloque
+	var vacio Atributos
+	//Primero reviso si la partición está montada
+	if montadas[id] != vacio {
+		graficar = true
+	} else {
+		consola += "Error: No se encontró el id <" + id + ">\n"
+	}
+
+	if graficar {
+		rutaDot := getPathWName(ruta)
+		rutaDot += "/" + getFileName(ruta) + ".dot"
+
+		file, err := os.Create(rutaDot)
+		if err != nil {
+			consola += "Error: No se pudo crear el archivo\n"
+			return
+		}
+
+		fileb, err := os.OpenFile(montadas[id].ruta, os.O_RDWR, 0777)
+		if err != nil {
+			consola += "Error: No se puede leer el disco duro\n"
+		}
+
+		arbol = ""
+		conexiones = ""
+		dot := ""
+
+		fileb.Seek(int64(montadas[id].inicio), 0)
+		binary.Read(fileb, binary.BigEndian, &superbloque)
+		var raiz Inodo
+		nombreNodo := strconv.Itoa(int(superbloque.S_inode_start))
+
+		fileb.Seek(int64(superbloque.S_inode_start), 0)
+		//fmt.Println(superbloque.S_inode_start)
+		//fmt.Println(superbloque.S_inode_start + int32(unsafe.Sizeof(Inodo{})))
+		binary.Read(fileb, binary.BigEndian, &raiz)
+		recorrer(raiz, fileb, nombreNodo)
+
+		//fileb.Seek(int64(superbloque.S_block_start), 0)
+		//fmt.Println(superbloque.S_block_start)
+		//var bloquecarpeta BloqueCarpetas
+		//binary.Read(fileb, binary.BigEndian, &bloquecarpeta)
+
+		//fmt.Println(bloquecarpeta.B_content[2].B_inodo)
+
+		//file.Seek(int64(bloquecarpeta.B_content[2].B_inodo), 0)
+		//binary.Read(fileb, binary.BigEndian, &raiz)
+		//fmt.Println(raiz.I_uid)
+		dot += "digraph G {\n"
+		dot += "rankdir=\"LR\"\n"
+		dot += arbol
+		dot += conexiones
+		dot += "}"
+
+		file.WriteString(dot)
+		file.Close()
+		fileb.Close()
+
+		nombreA := getFileName(ruta)
+		rutaA := getPathWName(ruta)
+		dotToPng(rutaA, nombreA)
+
+		consola += "¡Reporte generado con éxito!\n"
+	}
+}
+
+func recorrer(raiz Inodo, archivo *os.File, nombreNodo string) string {
+	var carpeta BloqueCarpetas
+	var barchivo BloqueArchivos
+	var nombreNodo2 string
+
+	var inodo Inodo
+
+	arbol += "\n"
+	for i := 0; i < 16; i++ {
+		//Grafico el bloque correspondiente y busco el inodo siguiente
+		if raiz.I_block[i] != 0 { //Si está ocupado
+			//Leo el bloque
+			if raiz.I_type == '0' { //Si es carpeta
+				archivo.Seek(int64(raiz.I_block[i]), 0)
+				binary.Read(archivo, binary.BigEndian, &carpeta)
+
+				nombreNodo2 = strconv.Itoa(int(int(raiz.I_block[i])))
+
+				arbol += nombreNodo2
+				arbol += "[shape=none label=<\n"
+				arbol += "<TABLE cellspacing=\"0\" cellpadding=\"0\">\n"
+				arbol += "<TR>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FF0093 \""
+				arbol += ">Bloque de carpeta</TD>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FF0093 \""
+				arbol += "></TD>\n"
+				arbol += "</TR>\n"
+
+				var name1 []byte
+
+				for _, char := range carpeta.B_content[0].B_name {
+					if char != 0 {
+						name1 = append(name1, char)
+					}
+				}
+				arbol += "<TR>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FA8CCB\""
+				arbol += ">b_name</TD>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FA8CCB \""
+				arbol += ">"
+				arbol += string(name1[:])
+				arbol += "</TD>\n"
+				arbol += "</TR>\n"
+
+				var name2 []byte
+
+				for _, char := range carpeta.B_content[1].B_name {
+					if char != 0 {
+						name2 = append(name2, char)
+					}
+				}
+				arbol += "<TR>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FA8CCB\""
+				arbol += ">b_name</TD>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FA8CCB \""
+				arbol += ">"
+				arbol += string(name2[:])
+				arbol += "</TD>\n"
+				arbol += "</TR>\n"
+
+				var name3 []byte
+
+				for _, char := range carpeta.B_content[2].B_name {
+					if char != 0 {
+						name3 = append(name3, char)
+					}
+				}
+				arbol += "<TR>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FA8CCB\""
+				arbol += ">b_name</TD>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FA8CCB \""
+				arbol += ">"
+				arbol += string(name3[:])
+				arbol += "</TD>\n"
+				arbol += "</TR>\n"
+
+				var name4 []byte
+
+				for _, char := range carpeta.B_content[3].B_name {
+					if char != 0 {
+						name4 = append(name4, char)
+					}
+				}
+				arbol += "<TR>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FA8CCB\""
+				arbol += ">b_name</TD>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FA8CCB \""
+				arbol += ">"
+				arbol += string(name4[:])
+				arbol += "</TD>\n"
+				arbol += "</TR>\n"
+
+				arbol += "</TABLE>\n"
+				arbol += ">]\n"
+				if i == 0 { //Para no regresar a la raiz
+					for j := 2; j < 4; j++ {
+						//fmt.Println(j)
+						if carpeta.B_content[j].B_inodo != 0 {
+							conexiones += nombreNodo2
+							conexiones += "->"
+							conexiones += strconv.Itoa(int(carpeta.B_content[j].B_inodo))
+							conexiones += "\n"
+							archivo.Seek(int64(carpeta.B_content[j].B_inodo), 0)
+							binary.Read(archivo, binary.BigEndian, &inodo)
+							//fmt.Println(inodo.I_type)
+							recorrer(inodo, archivo, strconv.Itoa(int(carpeta.B_content[j].B_inodo)))
+						}
+					}
+				} else {
+					for j := 0; j < 4; j++ {
+						if carpeta.B_content[j].B_inodo != 0 {
+							conexiones += nombreNodo2
+							conexiones += "->"
+							conexiones += strconv.Itoa(int(carpeta.B_content[j].B_inodo))
+							conexiones += "\n"
+							archivo.Seek(int64(carpeta.B_content[j].B_inodo), 0)
+							binary.Read(archivo, binary.BigEndian, &inodo)
+
+							recorrer(inodo, archivo, strconv.Itoa(int(carpeta.B_content[j].B_inodo)))
+						}
+					}
+				}
+
+			} else { //Si es archivo
+
+				archivo.Seek(int64(raiz.I_block[i]), 0)
+				binary.Read(archivo, binary.BigEndian, &barchivo)
+
+				nombreNodo2 = strconv.Itoa(int(raiz.I_block[i]))
+
+				arbol += nombreNodo2
+				arbol += "[shape=none label=<\n"
+				arbol += "<TABLE cellspacing=\"0\" cellpadding=\"0\">\n"
+				arbol += "<TR>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FFF000\""
+				arbol += ">Bloque de archivo</TD>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FFF000\""
+				arbol += "></TD>\n"
+				arbol += "</TR>\n"
+
+				arbol += "<TR>\n"
+				arbol += "<TD bgcolor="
+				arbol += "\"#FFF66C\""
+				arbol += ">"
+
+				for k := 0; k < 64; k++ {
+					if barchivo.B_content[k] == '\n' {
+						arbol += "<BR></BR>"
+					} else if barchivo.B_content[k] < 32 || barchivo.B_content[k] > 126 {
+						//No pasa nada
+						fmt.Print("")
+					} else {
+						arbol += string(barchivo.B_content[k])
+					}
+				}
+				//arbol+=barchivo.b_content;
+				arbol += "</TD>\n"
+				arbol += "</TR>\n"
+
+				arbol += "</TABLE>\n"
+				arbol += ">]\n"
+
+			}
+
+		}
+
+	}
+
+	//Grafico el inodo actual
+	arbol += nombreNodo
+	arbol += "[shape=none label=<\n"
+	arbol += "<TABLE cellspacing=\"0\" cellpadding=\"0\">\n"
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#00C9FF\""
+	arbol += "> Inodo</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#00C9FF\""
+	arbol += "></TD>\n"
+	arbol += "</TR>\n"
+
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">I_uid</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF \""
+	arbol += ">" + strconv.Itoa(int(raiz.I_uid))
+	arbol += "</TD>\n"
+	arbol += "</TR>\n"
+
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">I_gid</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF \""
+	arbol += ">" + strconv.Itoa(int(raiz.I_gid))
+	arbol += "</TD>\n"
+	arbol += "</TR>\n"
+
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">I_size</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF \""
+	arbol += ">" + strconv.Itoa(int(raiz.I_size))
+	arbol += "</TD>\n"
+	arbol += "</TR>\n"
+
+	var fechahora1 []byte
+
+	for _, char := range raiz.I_atime {
+		if char != 0 {
+			fechahora1 = append(fechahora1, char)
+		}
+	}
+
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">I_atime</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">" + string(fechahora1[:])
+	arbol += "</TD>\n"
+	arbol += "</TR>\n"
+
+	var fechahora2 []byte
+
+	for _, char := range raiz.I_ctime {
+		if char != 0 {
+			fechahora2 = append(fechahora2, char)
+		}
+	}
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">I_ctime</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">" + string(fechahora2[:])
+	arbol += "</TD>\n"
+	arbol += "</TR>\n"
+
+	var fechahora3 []byte
+
+	for _, char := range raiz.I_mtime {
+		if char != 0 {
+			fechahora3 = append(fechahora3, char)
+		}
+	}
+
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">I_mtime</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">" + string(fechahora3[:])
+	arbol += "</TD>\n"
+	arbol += "</TR>\n"
+
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">I_type</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">"
+	if raiz.I_type == '0' {
+		arbol += "0"
+	} else {
+		arbol += "1"
+	}
+
+	arbol += "</TD>\n"
+	arbol += "</TR>\n"
+
+	arbol += "<TR>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF\""
+	arbol += ">I_perm</TD>\n"
+	arbol += "<TD bgcolor="
+	arbol += "\"#64DEFF \""
+	arbol += ">" + strconv.Itoa(int(raiz.I_perm))
+	arbol += "</TD>\n"
+	arbol += "</TR>\n"
+
+	for i := 0; i <= 15; i++ {
+		if raiz.I_block[i] != 0 {
+			conexiones += nombreNodo //Los nombres de los nodos será su dirección en disco
+			conexiones += "->"
+			conexiones += strconv.Itoa(int(raiz.I_block[i]))
+			conexiones += "\n"
+		}
+	}
+
+	arbol += "</TABLE>\n"
+	arbol += ">]\n"
+	return arbol
+}
+
+func repFile(path string, id string, rutaF string) {
+	graficar := false
+
+	var superbloque SuperBloque
+	var vacio Atributos
+	//Primero reviso si la partición está montada
+	if montadas[id] != vacio {
+		graficar = true
+	} else {
+		consola += "Error: No se encontró el id <" + id + ">\n"
+	}
+
+	if graficar {
+
+		file, err := os.Create(path)
+		if err != nil {
+			consola += "Error: No se pudo crear el archivo\n"
+			return
+		}
+
+		fileb, err := os.OpenFile(montadas[id].ruta, os.O_RDWR, 0777)
+		if err != nil {
+			consola += "Error: No se puede leer el disco duro\n"
+		}
+		defer file.Close()
+		defer fileb.Close()
+		fileb.Seek(int64(montadas[id].inicio), 0)
+		binary.Read(fileb, binary.BigEndian, &superbloque)
+
+		//Muevo el puntero al inicio de los inodos, para buscar el inodo raiz
+		fileb.Seek(int64(superbloque.S_inode_start), 0)
+
+		var inodo Inodo
+		binary.Read(fileb, binary.BigEndian, &inodo)
+
+		//Hago una lista con los dferentes directorios
+		lista_ruta := strings.Split(rutaF, "/")
+		lista_ruta = lista_ruta[1:] //Si comienza con / la primera posición es un espacio vacío
+		var carpeta BloqueCarpetas
+		pos := 0
+		finded := false //Para determinar si se encontró o no
+		/*Primero voy a encontrar la carpeta que contiene al archivo*/
+		if rutaF[0] == '/' { //Si no empieza con la raiz, la ruta está mal
+			for len(lista_ruta) > 0 {
+				if inodo.I_type == '0' { //Si es carpeta
+					for i := 0; i <= 15; i++ { //recorro los apuntadores
+						if inodo.I_block[i] != 0 { //Si está ocupado
+							fileb.Seek(int64(inodo.I_block[i]), 0)
+							binary.Read(fileb, binary.BigEndian, &carpeta)
+
+							if i == 0 {
+								//fmt.Println(string(carpeta.B_content[2].B_name[:]))
+								//fmt.Println(lista_ruta[0])
+
+								var name []byte
+								for _, char := range carpeta.B_content[2].B_name {
+									if char != 0 {
+										name = append(name, char)
+									}
+								}
+
+								var name2 []byte
+								for _, char := range carpeta.B_content[3].B_name {
+									if char != 0 {
+										name2 = append(name2, char)
+									}
+								}
+								//name2 := lista_ruta[0]
+								if string(name[:]) == lista_ruta[0] {
+									lista_ruta = lista_ruta[1:]
+									if len(lista_ruta) == 0 {
+										//Si ya se encontraron todos los directorios, doy por encontrada la carpeta
+										finded = true
+										pos = 2
+										break
+									} else {
+										fileb.Seek(int64(carpeta.B_content[2].B_inodo), 0)
+										binary.Read(fileb, binary.BigEndian, &inodo)
+										break
+									}
+
+								} else if string(name2[:]) == lista_ruta[0] {
+									lista_ruta = lista_ruta[1:]
+									if len(lista_ruta) == 0 {
+										//Si ya se encontraron todos los directorios, doy por encontrada la carpeta
+										finded = true
+										pos = 3
+										break
+									} else {
+										fileb.Seek(int64(carpeta.B_content[3].B_inodo), 0)
+										binary.Read(fileb, binary.BigEndian, &inodo)
+										break
+									}
+								}
+
+							} else {
+								var name []byte
+								for _, char := range carpeta.B_content[0].B_name {
+									if char != 0 {
+										name = append(name, char)
+									}
+								}
+
+								var name1 []byte
+								for _, char := range carpeta.B_content[1].B_name {
+									if char != 0 {
+										name1 = append(name1, char)
+									}
+								}
+
+								var name2 []byte
+								for _, char := range carpeta.B_content[2].B_name {
+									if char != 0 {
+										name2 = append(name2, char)
+									}
+								}
+
+								var name3 []byte
+								for _, char := range carpeta.B_content[3].B_name {
+									if char != 0 {
+										name3 = append(name3, char)
+									}
+								}
+								if string(name[:]) == lista_ruta[0] {
+									lista_ruta = lista_ruta[1:]
+									if len(lista_ruta) == 0 {
+										//Si ya se encontraron todos los directorios, doy por encontrada la carpeta
+										finded = true
+										pos = 0
+										break
+									} else {
+										fileb.Seek(int64(carpeta.B_content[0].B_inodo), 0)
+										//Me muevo al inodo del apuntador
+										binary.Read(fileb, binary.BigEndian, &inodo)
+										break
+									}
+								} else if string(name1[:]) == lista_ruta[0] {
+									lista_ruta = lista_ruta[1:]
+									if len(lista_ruta) == 0 {
+										//Si ya se encontraron todos los directorios, doy por encontrada la carpeta
+										finded = true
+										pos = 1
+										break
+									} else {
+										fileb.Seek(int64(carpeta.B_content[1].B_inodo), 0)
+										//Me muevo al inodo del apuntador
+										binary.Read(fileb, binary.BigEndian, &inodo)
+										break
+									}
+								} else if string(name2[:]) == lista_ruta[0] {
+									lista_ruta = lista_ruta[1:]
+									if len(lista_ruta) == 0 {
+										//Si ya se encontraron todos los directorios, doy por encontrada la carpeta
+										finded = true
+										pos = 2
+										break
+									} else {
+										fileb.Seek(int64(carpeta.B_content[2].B_inodo), 0)
+										binary.Read(fileb, binary.BigEndian, &inodo)
+										break
+									}
+								} else if string(name3[:]) == lista_ruta[0] {
+									lista_ruta = lista_ruta[1:]
+									if len(lista_ruta) == 0 {
+										//Si ya se encontraron todos los directorios, doy por encontrada la carpeta
+										finded = true
+										pos = 3
+										break
+									} else {
+										fileb.Seek(int64(carpeta.B_content[3].B_inodo), 0)
+										binary.Read(fileb, binary.BigEndian, &inodo)
+										break
+									}
+								}
+							}
+
+						}
+
+						if i == 15 && !finded {
+							//Si ya se llegó al final y no se ha encontrado la dirección, no será encontrada
+							//fmt.Println("FINAL")
+							consola += "Error: No se encontró la ruta del archivo a reportar\n"
+							//Limpio la lista para que se salga del ciclo
+							lista_ruta = nil
+						}
+					}
+				}
+			}
+		}
+
+		if finded {
+			//Ahora que encontré la carpeta, me muevo al archivo correspondiente
+
+			fileb.Seek(int64(carpeta.B_content[pos].B_inodo), 0)
+			binary.Read(fileb, binary.BigEndian, &inodo)
+			var bloquea BloqueArchivos
+			for i := 0; i <= 15; i++ {
+				if inodo.I_block[i] != 0 {
+					fileb.Seek(int64(inodo.I_block[i]), 0)
+					binary.Read(fileb, binary.BigEndian, &bloquea)
+					for _, char := range bloquea.B_content {
+						if char != 0 {
+							file.WriteString(string(char))
+						}
+					}
+					//file.WriteString(string(bloquea.B_content[:]))
+
+				}
+			}
+
+			consola += "¡Reporte generado correctamente!\n"
+
+		}
+	}
+}
+
 func rep(parametros []string) {
 	fname, fpath, fid, fruta := false, false, false, false
 
@@ -1179,6 +1783,12 @@ func rep(parametros []string) {
 			repDisk(path, id)
 		} else if strings.EqualFold(name, "sb") {
 			repSb(path, id)
+		} else if strings.EqualFold(name, "tree") {
+			repTree(path, id)
+		} else if strings.EqualFold(name, "file") {
+			repFile(path, id, ruta)
+		} else {
+			consola += "Error: reporte <" + name + "> no disponible\n"
 		}
 	} else {
 		fmt.Println(ruta, fruta)
@@ -1197,7 +1807,9 @@ func formatear(id string) {
 	}
 
 	if encontrada {
-
+		sizeInodo := unsafe.Sizeof(Inodo{})
+		sizeBloque := unsafe.Sizeof(BloqueArchivos{})
+		sizeSuperBloque := unsafe.Sizeof(SuperBloque{})
 		file, err := os.OpenFile(particion.ruta, os.O_RDWR, 0777)
 		if err != nil {
 			consola += "Error: No se puede abrir el disco duro\n"
@@ -1208,8 +1820,8 @@ func formatear(id string) {
 		var n_numerador, n_denominador, inodos_parcial float64
 		var superbloque SuperBloque
 
-		n_numerador = float64(particion.tamano) - float64(unsafe.Sizeof(superbloque))
-		n_denominador = 4 + float64(unsafe.Sizeof(Inodo{})) + (3 * float64(unsafe.Sizeof(BloqueArchivos{})))
+		n_numerador = float64(particion.tamano) - float64(sizeSuperBloque)
+		n_denominador = 4 + float64(sizeInodo) + (3 * float64(sizeBloque))
 		n_numerador /= n_denominador
 		n = int(n_numerador)
 
@@ -1230,20 +1842,21 @@ func formatear(id string) {
 			t.Hour(), t.Minute(), t.Second())
 		copy(raiz.I_ctime[:], []byte(fecha))
 		copy(raiz.I_mtime[:], []byte(fecha))
+
 		raiz.I_type = '0' //Tipo carpeta
 		raiz.I_perm = 664
 
 		//Bloque carpeta
 		var bloquecarpeta BloqueCarpetas
-		copy(bloquecarpeta.B_content[0].B_name[:], "/")
-		copy(bloquecarpeta.B_content[1].B_name[:], "/")
-		copy(bloquecarpeta.B_content[2].B_name[:], "users.txt")
+		copy(bloquecarpeta.B_content[0].B_name[:], []byte("/"))
+		copy(bloquecarpeta.B_content[1].B_name[:], []byte("/"))
+		copy(bloquecarpeta.B_content[2].B_name[:], []byte("users.txt"))
 
 		//Inodo de archivo
 		var archivo Inodo
 		archivo.I_uid = 1
 		archivo.I_gid = 1
-		archivo.I_size = 37
+		archivo.I_size = 27
 		t = time.Now()
 		fecha = fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
 			t.Year(), t.Month(), t.Day(),
@@ -1254,16 +1867,16 @@ func formatear(id string) {
 		archivo.I_perm = 664
 
 		//Asocio el inodo raiz con el bloque de carpeta
-		raiz.I_block[0] = int32(particion.inicio) + int32(unsafe.Sizeof(superbloque)) + int32(inodos) + int32(bloques) + int32((int32(inodos) * int32(unsafe.Sizeof(Inodo{})))) //Posición del primer bloque
-		//Asocio el bloque de carpeta con el inodo de archivo+
-		bloquecarpeta.B_content[2].B_inodo = int32(particion.inicio) + int32(unsafe.Sizeof(superbloque)) + int32(inodos) + int32(bloques) + int32(unsafe.Sizeof(Inodo{}))
+		raiz.I_block[0] = int32(particion.inicio) + int32(sizeSuperBloque) + int32(inodos) + int32(bloques) + int32((int32(inodos) * int32(sizeInodo))) //Posición del primer bloque
+		//Asocio el bloque de carpeta con el inodo de archivo
+		bloquecarpeta.B_content[2].B_inodo = int32(particion.inicio) + int32(sizeSuperBloque) + int32(inodos) + int32(bloques) + int32(sizeInodo)
 
 		//Escribo el contenido de users.txt
 		var barchivo BloqueArchivos
 		copy(barchivo.B_content[:], []byte("1,G,root\n1,U,root,root,123\n"))
 
 		//Asocio el inodo de archivo con el bloque de archivo
-		archivo.I_block[0] = int32(particion.inicio) + int32(unsafe.Sizeof(superbloque)) + int32(inodos) + int32(bloques) + int32((int32(inodos) * int32(unsafe.Sizeof(Inodo{})))) + int32(unsafe.Sizeof(BloqueArchivos{}))
+		archivo.I_block[0] = int32(particion.inicio) + int32(sizeSuperBloque) + int32(inodos) + int32(bloques) + int32((int32(inodos) * int32(sizeInodo))) + int32(sizeBloque)
 
 		//Agrego los atributos del superbloque
 		superbloque.S_filesystem_type = 2
@@ -1273,47 +1886,53 @@ func formatear(id string) {
 		superbloque.S_free_blocks_count = int32(bloques) - 2
 		copy(superbloque.S_mtime[:], []byte("0000-00-00T00:00:00"))
 		superbloque.S_magic = 0xEF53
-		superbloque.S_block_size = int32(unsafe.Sizeof(BloqueArchivos{}))
-		superbloque.S_inode_size = int32(unsafe.Sizeof(Inodo{}))
-		superbloque.S_first_ino = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos) + int32(bloques) + int32(int32(2)*int32(unsafe.Sizeof(Inodo{})))
-		superbloque.S_first_blo = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos) + int32(bloques) + int32(int32(inodos)*int32(unsafe.Sizeof(Inodo{}))) + int32(int32(2)*int32(unsafe.Sizeof(BloqueArchivos{})))
-		superbloque.S_bm_inode_start = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{}))
-		superbloque.S_bm_block_start = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos)
-		superbloque.S_inode_start = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos) + int32(bloques)
-		superbloque.S_block_start = int32(particion.inicio) + int32(unsafe.Sizeof(SuperBloque{})) + int32(inodos) + int32(bloques) + int32(int32(inodos)*int32(unsafe.Sizeof(Inodo{})))
+		superbloque.S_block_size = int32(sizeBloque)
+		superbloque.S_inode_size = int32(sizeInodo)
+		superbloque.S_first_ino = int32(particion.inicio) + int32(sizeSuperBloque) + int32(inodos) + int32(bloques) + int32(int32(2)*int32(sizeInodo))
+		superbloque.S_first_blo = int32(particion.inicio) + int32(sizeSuperBloque) + int32(inodos) + int32(bloques) + int32(int32(inodos)*int32(sizeInodo)) + int32(int32(2)*int32(sizeBloque))
+		superbloque.S_bm_inode_start = int32(particion.inicio) + int32(sizeSuperBloque)
+		superbloque.S_bm_block_start = int32(particion.inicio) + int32(sizeSuperBloque) + int32(inodos)
+		superbloque.S_inode_start = int32(particion.inicio) + int32(sizeSuperBloque) + int32(inodos) + int32(bloques)
+		superbloque.S_block_start = int32(particion.inicio) + int32(sizeSuperBloque) + int32(inodos) + int32(bloques) + int32(int32(inodos)*int32(sizeInodo))
 
 		/*Escribiendo las estructuras en el archivo*/
 		file.Seek(int64(particion.inicio), 0)
 		//Al inicio de la partición va el superbloque
-		binary.Write(file, binary.LittleEndian, &superbloque)
+		binary.Write(file, binary.BigEndian, &superbloque)
 		var cero, uno byte = '0', '1'
 		//Bitmap de inodos
 		file.Seek(int64(superbloque.S_bm_inode_start), 0)
-		binary.Write(file, binary.LittleEndian, &uno) //Ya se escribieron dos inodos
-		binary.Write(file, binary.LittleEndian, &uno)
+		binary.Write(file, binary.BigEndian, &uno) //Ya se escribieron dos inodos
+		binary.Write(file, binary.BigEndian, &uno)
 		//Ahora los 0s
 		for i := 2; i < inodos; i++ {
-			binary.Write(file, binary.LittleEndian, &cero)
+			binary.Write(file, binary.BigEndian, &cero)
 		}
 
 		//Bitmap de bloques
 		file.Seek(int64(superbloque.S_bm_block_start), 0)
-		binary.Write(file, binary.LittleEndian, &uno) //Ya se escribieron dos inodos
-		binary.Write(file, binary.LittleEndian, &uno)
+		binary.Write(file, binary.BigEndian, &uno) //Ya se escribieron dos bloques
+		binary.Write(file, binary.BigEndian, &uno)
 		//Ahora los 0s
 		for i := 2; i < bloques; i++ {
-			binary.Write(file, binary.LittleEndian, &cero)
+			binary.Write(file, binary.BigEndian, &cero)
 		}
 
 		//Escribo los inodos creados
 		file.Seek(int64(superbloque.S_inode_start), 0)
-		binary.Write(file, binary.LittleEndian, &raiz)
-		binary.Write(file, binary.LittleEndian, &archivo)
+		binary.Write(file, binary.BigEndian, &raiz)
+		file.Seek(int64(bloquecarpeta.B_content[2].B_inodo), 0)
+		binary.Write(file, binary.BigEndian, &archivo)
 
 		//Escribo los bloques creados
 		file.Seek(int64(superbloque.S_block_start), 0)
-		binary.Write(file, binary.LittleEndian, &bloquecarpeta)
-		binary.Write(file, binary.LittleEndian, &barchivo)
+		binary.Write(file, binary.BigEndian, &bloquecarpeta)
+		file.Seek(int64(archivo.I_block[0]), 0)
+		binary.Write(file, binary.BigEndian, &barchivo)
+
+		file.Seek(int64(superbloque.S_inode_start), 0)
+		binary.Read(file, binary.BigEndian, raiz)
+		binary.Read(file, binary.BigEndian, raiz)
 
 		consola += "¡Partición formateada con el sistema de archivos EXT2!\n"
 
@@ -1353,7 +1972,7 @@ func mkfs(parametros []string) {
 }
 func Analizar(lineas []string) string {
 	consola = "" //Reestableciendo la consola cada vez que se llama a analizar
-
+	//fmt.Println(unsafe.Sizeof(MBR{}))
 	for _, linea := range lineas {
 		if len(linea) < 5 {
 			continue //Si la línea solo incluye un salto de línea
