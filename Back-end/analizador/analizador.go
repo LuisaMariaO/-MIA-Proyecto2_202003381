@@ -1806,12 +1806,16 @@ func rep(parametros []string) {
 		} else if strings.EqualFold(name, "tree") {
 			repTree(path, id)
 		} else if strings.EqualFold(name, "file") {
-			repFile(path, id, ruta)
+			if fruta {
+				repFile(path, id, ruta)
+			} else {
+				consola += "Error: Falta el parámetro obligatorio >ruta"
+			}
 		} else {
 			consola += "Error: reporte <" + name + "> no disponible\n"
 		}
 	} else {
-		fmt.Println(ruta, fruta)
+
 		consola += "Error: Faltan parámetros obligatorios\n"
 	}
 }
@@ -2047,6 +2051,9 @@ func IniciarSesion(user string, pass string, id string) (byte, string) {
 				linea := strings.Split(lineas[0], ",")
 				for len(linea) > 0 {
 					auid = linea[0]
+					if auid == "0" { //Si está eliminiado, deja de analizar
+						break
+					}
 					linea = linea[1:]
 
 					if linea[0] == "G" {
@@ -2094,7 +2101,7 @@ func IniciarSesion(user string, pass string, id string) (byte, string) {
 		}
 
 	} else {
-		consola += "Error: Ya existe una sesión iniciada"
+		consola += "Error: Ya existe una sesión iniciada\n"
 		return '0', "Error: Ya existe una sesión iniciada"
 	}
 	return '0', ""
@@ -2165,6 +2172,171 @@ func encodeBase64(ruta string) {
 
 	Reportes.Reportes = append(Reportes.Reportes, reporte)
 }
+
+func crearGrupo(name string) {
+	if logged {
+		if userLog == "root" {
+			file, err := os.OpenFile(montadas[idLog].ruta, os.O_RDWR, 0777)
+			if err != nil {
+				consola += "Error: No se puede abrir el disco duro\n"
+			}
+			defer file.Close()
+
+			//Busco el inodo de users.txt, es decir, el segundo inodo de la tabla de inodos
+			var superbloque SuperBloque
+			file.Seek(int64(montadas[idLog].inicio), 0)
+			binary.Read(file, binary.BigEndian, &superbloque)
+
+			var inodo Inodo
+			file.Seek(int64(superbloque.S_inode_start)+int64(unsafe.Sizeof(Inodo{})), 0)
+			binary.Read(file, binary.BigEndian, &inodo)
+
+			var contenido []byte
+			var block, pos int //block -> Ultimo bloque de archivo ocupado, pos->posición en el bloque del último caracter usado
+			var barchivo BloqueArchivos
+
+			for i := 0; i <= 15; i++ {
+				if inodo.I_block[i] != 0 {
+					//Si el bloque está ocupado
+					block = i
+					file.Seek(int64(inodo.I_block[i]), 0)
+					binary.Read(file, binary.BigEndian, &barchivo)
+
+					for j := 0; j < 64; j++ {
+						if barchivo.B_content[j] != 0 {
+							contenido = append(contenido, barchivo.B_content[j])
+							pos = j
+						}
+					}
+
+				}
+			}
+
+			gid := 0 //Ultimo gid encontrado
+			gidaux := 0
+			encontrado := false
+			lineas := strings.Split(string(contenido[:]), "\n")
+			lineas = lineas[:len(lineas)-1] //Por el salto de línea al final, elimino el último elemento
+			for len(lineas) > 0 {
+				linea := strings.Split(lineas[0], ",")
+				for len(linea) > 0 {
+					gidaux, _ = strconv.Atoi(string(linea[0]))
+					linea = linea[1:]
+					if linea[0] == "G" {
+						//Estoy leyendo un grupo
+						//	fmt.Println("Grupito")
+						if gidaux != 0 { //Si el grupo no ha sido eliminado, sigo analizando
+							gid = gidaux
+							linea = linea[1:]
+							//Leo el grupo
+							if linea[0] == name {
+								encontrado = true
+							}
+							linea = linea[1:]
+						} else {
+							linea = nil
+						}
+
+					} else {
+						//Si estoy leyendo un usuario, salto la linea
+						linea = nil
+
+					}
+					linea = nil
+
+				}
+				if encontrado {
+					break
+				}
+				lineas = lineas[1:]
+			}
+
+			if !encontrado {
+				gid++
+				pos++
+				lineaNueva := ""
+				var nuevoBloque bool = false
+				var barchivo2 BloqueArchivos
+				if len(name) <= 10 {
+					lineaNueva = strconv.Itoa(gid) + ",G," + name + "\n"
+					inodo.I_size += int32(len(lineaNueva))
+					lineaNuevaByte := []byte(lineaNueva)
+					for _, char := range lineaNuevaByte {
+						if pos == 64 {
+							//Escribo los cambios en el bloque actual
+							file.Seek(int64(superbloque.S_block_start)+int64(unsafe.Sizeof(BloqueArchivos{})), 0)
+							binary.Write(file, binary.BigEndian, &barchivo)
+
+							barchivo = barchivo2
+							nuevoBloque = true
+							pos = 0
+							block++
+							inodo.I_block[block] = superbloque.S_block_start + int32(2*unsafe.Sizeof(BloqueArchivos{}))
+
+						}
+						barchivo.B_content[pos] = char
+						pos++
+					}
+
+					if nuevoBloque {
+						superbloque.S_free_blocks_count -= 1
+						//Escribo el nuevo bloque
+						file.Seek(int64(superbloque.S_block_start)+int64(2*unsafe.Sizeof(BloqueArchivos{})), 0)
+						binary.Write(file, binary.BigEndian, &barchivo)
+
+						//Actualizo el superbloque
+						file.Seek(int64(montadas[idLog].inicio), 0)
+						binary.Write(file, binary.BigEndian, &superbloque)
+
+					} else {
+						//Actualizo el bloque de archivos
+						file.Seek(int64(superbloque.S_block_start)+int64(unsafe.Sizeof(BloqueArchivos{})), 0)
+						binary.Write(file, binary.BigEndian, &barchivo)
+					}
+					//Actualizo el inodo
+					file.Seek(int64(superbloque.S_inode_start)+int64(unsafe.Sizeof(Inodo{})), 0)
+					binary.Write(file, binary.BigEndian, &inodo)
+					consola += "¡Grupo <" + name + "> creado con éxito!\n"
+
+				} else {
+					consola += "Error: El nombre del grupo debe tener un máximo de 10 caracteres\n"
+				}
+			} else {
+				consola += "Error: Ya existe un grupo llamado <" + name + ">\n"
+			}
+
+		} else {
+			consola += "Error: Acción no disponible para el usuario actual\n"
+		}
+	} else {
+		consola += "Error: No hay una sesión iniciada\n"
+	}
+}
+
+func mkgrp(parametros []string) {
+	fname := false
+	var name string
+	for len(parametros) > 0 {
+		tmp := parametros[0]
+		tipo, valor := getTipoValor(tmp)
+		if tipo == ">name" {
+			valor = regresarEspacio(valor)
+			name = valor
+			fname = true
+		} else if tipo[0] == '#' {
+			break
+		} else {
+			consola += "Error: Parámetro <" + valor + "> no válido\n"
+		}
+		parametros = parametros[1:]
+	}
+
+	if fname {
+		crearGrupo(name)
+	} else {
+		consola += "Error: Faltan parámetros obligatorios\n"
+	}
+}
 func Analizar(lineas []string) string {
 	consola = ""            //Reestableciendo la consola cada vez que se llama a analizar
 	Reportes.Reportes = nil //Reestablesco la lista de reportes
@@ -2205,6 +2377,9 @@ func Analizar(lineas []string) string {
 			login(params)
 		} else if strings.EqualFold(params[0], "logout") {
 			Logout()
+		} else if strings.EqualFold(params[0], "mkgrp") {
+			params = params[1:]
+			mkgrp(params)
 		} else if params[0][0] == '#' {
 
 			//Si es un comentario, no pasa nada

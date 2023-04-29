@@ -78,7 +78,7 @@ rep >id=811B >path="/home/luisa/parte2/inicial/ext3_sb_1.png" >name=sb
 rep >id=811A >path="/home/luisa/parte2/inicial/treeA.png" >name=tree
 rep >id=811B >path="/home/luisa/parte2/inicial/treeB.png" >name=tree
 
-rep >id=811A >path="/home/luisa/parte2/inicial/file1.txt >name=file >ruta=/users.txt
+rep >id=811A >path="/home/luisa/parte2/inicial/file1.txt" >name=file >ruta=/users.txt
 rep >id=811B >path="/home/luisa/parte2/inicial/file2.txt" >name=file >ruta=/users.txt
 
 login >id=811A >user=root >pwd=123
