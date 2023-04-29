@@ -1,8 +1,11 @@
 package analizador
 
 import (
+	"bufio"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -39,6 +42,16 @@ var arbol, conexiones = "", ""
 
 var userLog, uidLog, idLog, gidLog string
 var logged bool = false
+
+type reportes struct {
+	Reportes []Reporte `json:"reportes"`
+}
+type Reporte struct {
+	Name    string `json:"nombre"`
+	Reporte string `json:"reporte"`
+}
+
+var Reportes reportes
 
 func espacioCadena(comando string) string {
 	var cadena bool = false
@@ -1000,6 +1013,7 @@ func repDisk(ruta string, id string) {
 		dotToPng(rutaA, nombreA)
 
 		consola += "¡Reporte generado con éxito!\n"
+		encodeBase64(rutaA + "/" + nombreA + ".jpg")
 	}
 
 }
@@ -1147,7 +1161,7 @@ func repSb(ruta string, id string) {
 		dotToPng(rutaA, nombreA)
 
 		consola += "¡Reporte generado con éxito!\n"
-
+		encodeBase64(rutaA + "/" + nombreA + ".jpg")
 	}
 }
 
@@ -1218,6 +1232,7 @@ func repTree(ruta string, id string) {
 		dotToPng(rutaA, nombreA)
 
 		consola += "¡Reporte generado con éxito!\n"
+		encodeBase64(rutaA + "/" + nombreA + ".jpg")
 	}
 }
 
@@ -1748,6 +1763,7 @@ func repFile(path string, id string, rutaF string) {
 			}
 
 			consola += "¡Reporte generado correctamente!\n"
+			encodeBase64(path)
 
 		}
 	}
@@ -2131,8 +2147,27 @@ func Logout() (byte, string) {
 		return '0', "Error: No existe una sesión iniciada\n"
 	}
 }
+
+func encodeBase64(ruta string) {
+	//fmt.Println(ruta)
+	file, _ := os.Open(ruta)
+
+	defer file.Close()
+	reader := bufio.NewReader(file)
+	content, _ := ioutil.ReadAll(reader)
+	// Encode as base64.
+	encoded := base64.StdEncoding.EncodeToString(content)
+	//fmt.Println(encoded)
+	var reporte Reporte
+
+	reporte.Reporte = encoded
+	reporte.Name = filepath.Base(ruta)
+
+	Reportes.Reportes = append(Reportes.Reportes, reporte)
+}
 func Analizar(lineas []string) string {
-	consola = "" //Reestableciendo la consola cada vez que se llama a analizar
+	consola = ""            //Reestableciendo la consola cada vez que se llama a analizar
+	Reportes.Reportes = nil //Reestablesco la lista de reportes
 	//fmt.Println(unsafe.Sizeof(MBR{}))
 	for _, linea := range lineas {
 		if len(linea) < 5 {

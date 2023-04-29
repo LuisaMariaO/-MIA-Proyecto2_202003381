@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Service  from "../Services/Service";
+import download from 'downloadjs'
 
 function Index() {
     const navigate = useNavigate();
@@ -74,14 +75,34 @@ function Index() {
       
     });
     };
+
+    const handleReports = (event) => {
+      event.preventDefault()
+      Service.reports()
+      .then(({reportes}) => {
+        if (reportes!=null){
+          for (let i=0; i<reportes.length;i++){
+            download(atob(reportes[i].reporte),reportes[i].nombre, { type: "image/jpeg"  || "text/plain"});
+          }
+        }
+      
+    });
+    };
   return (
     <>
     <nav class="navbar bg-dark" data-bs-theme="dark">
     <div class="container-fluid">
-      <a class="navbar-brand" onClick={ ()=>navigate('/') } href="/">
+      <a class="navbar-brand" onClick={ ()=>navigate('/') } href="">
         <img src="https://cdn-icons-png.flaticon.com/512/3767/3767084.png" alt="Logo" width="30" height="24" class="d-inline-block align-text-top"/>
         MIA Proyecto2
       </a>
+      &nbsp; &nbsp; &nbsp;
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+      <li class="nav-item">
+          <a class="nav-link"  href="" onClick={handleReports}>Reportes</a>
+        </li>
+        </ul>
       <div class="btn-group" role="group" aria-label="Basic example">
       <button class="btn btn-outline-success" type="button" onClick={()=>navigate('/login')}>Login</button>
       <button class="btn btn-outline-danger" type="button" onClick={ handleLogout }>Logout</button>

@@ -29,3 +29,8 @@ export const logout = async() =>{
     const { data } = await instance.post("/logout")
     return data
 }
+
+export const reports = async() =>{
+    const { data } = await instance.get("/reports")
+    return data
+}

@@ -132,6 +132,22 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.Write(jsonResp)
 }
 
+func handleReports(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	resp := analizador.Reportes
+
+	//resp := ResponseResult{consola}
+
+	jsonResp, err := json.Marshal(resp)
+	if err != nil {
+		fmt.Printf("Error happened in JSON marshal. Err: %s", err)
+	}
+	w.Write(jsonResp)
+}
+
 func Prueba() {
 	fmt.Println("Que pasaaa")
 }
@@ -145,6 +161,7 @@ func main() {
 	http.HandleFunc("/postCode", handleCode)
 	http.HandleFunc("/login", handleLogin)
 	http.HandleFunc("/logout", handleLogout)
+	http.HandleFunc("/reports", handleReports)
 	http.HandleFunc("/favicon.ico", doNothing)
 	http.ListenAndServe(":8000", nil)
 }
