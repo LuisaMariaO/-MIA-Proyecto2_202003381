@@ -86,5 +86,6 @@ mkgrp >name=grupito
 mkgrp >name=grupix
 mkgrp >name=hola
 mkgrp >name=adios
+mkgrp >name=otro
 
-rmgrp >name=grupito
+rmgrp >name=otro

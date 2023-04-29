@@ -2283,7 +2283,7 @@ func crearGrupo(name string) {
 					if nuevoBloque {
 						superbloque.S_free_blocks_count -= 1
 						//Escribo el nuevo bloque
-						file.Seek(int64(superbloque.S_block_start)+int64(2*unsafe.Sizeof(BloqueArchivos{})), 0)
+						file.Seek(int64(inodo.I_block[block]), 0)
 						binary.Write(file, binary.BigEndian, &barchivo)
 
 						//Actualizo el superbloque
@@ -2292,7 +2292,7 @@ func crearGrupo(name string) {
 
 					} else {
 						//Actualizo el bloque de archivos
-						file.Seek(int64(superbloque.S_block_start)+int64(unsafe.Sizeof(BloqueArchivos{})), 0)
+						file.Seek(int64(inodo.I_block[block]), 0)
 						binary.Write(file, binary.BigEndian, &barchivo)
 					}
 					//Actualizo el inodo
@@ -2423,16 +2423,17 @@ func eliminarGrupo(name string) {
 
 			if encontrado {
 				var block = 0 //Bloque que se va a modificar
+				punteroOr := punteroL
 				if punteroL >= 64 {
 					block = int(math.Round(float64(punteroL / 64)))
-					punteroL = punteroL - ((block - 1) * 64)
+					punteroL = punteroL - ((block) * 64)
 
 				}
 				//Leo el bloque correcto
 				file.Seek(int64(inodo.I_block[block]), 0)
 				binary.Read(file, binary.BigEndian, &barchivo)
 
-				if contenido[punteroL+1] == ',' {
+				if contenido[punteroOr+1] == ',' {
 					barchivo.B_content[punteroL] = '0'
 				} else {
 					barchivo.B_content[punteroL] = '0'
