@@ -2252,6 +2252,7 @@ func crearGrupo(name string) {
 			}
 
 			if !encontrado {
+
 				gid++
 				pos++
 				lineaNueva := ""
@@ -2277,7 +2278,8 @@ func crearGrupo(name string) {
 						barchivo.B_content[pos] = char
 						pos++
 					}
-
+					/*TODO SABADO : Escribir el bloque dependiendo del bitmap de bloques y actualizarlo
+					  Actualizar el bloque según el correspondiente block*/
 					if nuevoBloque {
 						superbloque.S_free_blocks_count -= 1
 						//Escribo el nuevo bloque
@@ -2337,6 +2339,146 @@ func mkgrp(parametros []string) {
 		consola += "Error: Faltan parámetros obligatorios\n"
 	}
 }
+func eliminarGrupo(name string) {
+	if logged {
+		if userLog == "root" {
+			file, err := os.OpenFile(montadas[idLog].ruta, os.O_RDWR, 0777)
+			if err != nil {
+				consola += "Error: No se puede abrir el disco duro\n"
+			}
+			defer file.Close()
+
+			//Busco el inodo de users.txt, es decir, el segundo inodo de la tabla de inodos
+			var superbloque SuperBloque
+			file.Seek(int64(montadas[idLog].inicio), 0)
+			binary.Read(file, binary.BigEndian, &superbloque)
+
+			var inodo Inodo
+			file.Seek(int64(superbloque.S_inode_start)+int64(unsafe.Sizeof(Inodo{})), 0)
+			binary.Read(file, binary.BigEndian, &inodo)
+
+			var contenido []byte
+
+			var barchivo BloqueArchivos
+
+			for i := 0; i <= 15; i++ {
+				if inodo.I_block[i] != 0 {
+					//Si el bloque está ocupado
+
+					file.Seek(int64(inodo.I_block[i]), 0)
+					binary.Read(file, binary.BigEndian, &barchivo)
+
+					for j := 0; j < 64; j++ {
+						if barchivo.B_content[j] != 0 {
+							contenido = append(contenido, barchivo.B_content[j])
+
+						}
+					}
+
+				}
+			}
+
+			gidaux := 0
+			encontrado := false
+			punteroL := 0 //Actualiza la posición en la que inicia la línea del grupo a eliminar
+			lineas := strings.Split(string(contenido[:]), "\n")
+			lineas = lineas[:len(lineas)-1] //Por el salto de línea al final, elimino el último elemento
+			for len(lineas) > 0 {
+
+				linea := strings.Split(lineas[0], ",")
+
+				for len(linea) > 0 {
+					gidaux, _ = strconv.Atoi(string(linea[0]))
+					linea = linea[1:]
+					if linea[0] == "G" {
+						//Estoy leyendo un grupo
+						//	fmt.Println("Grupito")
+						if gidaux != 0 { //Si el grupo no ha sido eliminado, sigo analizando
+
+							linea = linea[1:]
+							//Leo el grupo
+							if linea[0] == name {
+								encontrado = true
+							}
+							linea = linea[1:]
+						} else {
+							linea = nil
+						}
+
+					} else {
+						//Si estoy leyendo un usuario, salto la linea
+						linea = nil
+
+					}
+					linea = nil
+
+				}
+				if encontrado {
+					break
+				}
+				punteroL += len(lineas[0]) + 1 //Sumo 1 por el salto de línea perdido
+				lineas = lineas[1:]
+
+			}
+
+			if encontrado {
+				var block = 0 //Bloque que se va a modificar
+				if punteroL >= 64 {
+					block = int(math.Round(float64(punteroL / 64)))
+					punteroL = punteroL - ((block - 1) * 64)
+
+				}
+				//Leo el bloque correcto
+				file.Seek(int64(inodo.I_block[block]), 0)
+				binary.Read(file, binary.BigEndian, &barchivo)
+
+				if contenido[punteroL+1] == ',' {
+					barchivo.B_content[punteroL] = '0'
+				} else {
+					barchivo.B_content[punteroL] = '0'
+					barchivo.B_content[punteroL+1] = '0'
+				}
+				//Actualizo el bloque de archivos
+				file.Seek(int64(inodo.I_block[block]), 0)
+				binary.Write(file, binary.BigEndian, &barchivo)
+
+				consola += "¡Grupo eliminado con éxito!\n"
+
+			} else {
+				consola += "Error: No se encontró el grupo <" + name + ">\n"
+			}
+
+		} else {
+			consola += "Error: Acción no disponible para el usuario actual\n"
+		}
+	} else {
+		consola += "Error: No hay una sesión iniciada\n"
+	}
+}
+func rmgrp(parametros []string) {
+	fname := false
+	var name string
+	for len(parametros) > 0 {
+		tmp := parametros[0]
+		tipo, valor := getTipoValor(tmp)
+		if tipo == ">name" {
+			valor = regresarEspacio(valor)
+			name = valor
+			fname = true
+		} else if tipo[0] == '#' {
+			break
+		} else {
+			consola += "Error: Parámetro <" + valor + "> no válido\n"
+		}
+		parametros = parametros[1:]
+	}
+
+	if fname {
+		eliminarGrupo(name)
+	} else {
+		consola += "Error: Faltan parámetros obligatorios\n"
+	}
+}
 func Analizar(lineas []string) string {
 	consola = ""            //Reestableciendo la consola cada vez que se llama a analizar
 	Reportes.Reportes = nil //Reestablesco la lista de reportes
@@ -2380,6 +2522,9 @@ func Analizar(lineas []string) string {
 		} else if strings.EqualFold(params[0], "mkgrp") {
 			params = params[1:]
 			mkgrp(params)
+		} else if strings.EqualFold(params[0], "rmgrp") {
+			params = params[1:]
+			rmgrp(params)
 		} else if params[0][0] == '#' {
 
 			//Si es un comentario, no pasa nada
