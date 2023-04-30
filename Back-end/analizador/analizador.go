@@ -2544,10 +2544,7 @@ func existsGrp(contenido []byte, name string) bool {
 		lineas = lineas[1:]
 	}
 
-	if encontrado {
-		return true
-	}
-	return false
+	return encontrado
 }
 
 func crearUsuario(user string, password string, group string) {
@@ -2764,6 +2761,155 @@ func mkusr(parametros []string) {
 	}
 }
 
+func eliminarUsuario(name string) {
+	if logged {
+		if userLog == "root" {
+			file, err := os.OpenFile(montadas[idLog].ruta, os.O_RDWR, 0777)
+			if err != nil {
+				consola += "Error: No se puede abrir el disco duro\n"
+			}
+			defer file.Close()
+
+			//Busco el inodo de users.txt, es decir, el segundo inodo de la tabla de inodos
+			var superbloque SuperBloque
+			file.Seek(int64(montadas[idLog].inicio), 0)
+			binary.Read(file, binary.BigEndian, &superbloque)
+
+			var inodo Inodo
+			file.Seek(int64(superbloque.S_inode_start)+int64(unsafe.Sizeof(Inodo{})), 0)
+			binary.Read(file, binary.BigEndian, &inodo)
+
+			var contenido []byte
+
+			var barchivo BloqueArchivos
+
+			for i := 0; i <= 15; i++ {
+				if inodo.I_block[i] != 0 {
+					//Si el bloque está ocupado
+
+					file.Seek(int64(inodo.I_block[i]), 0)
+					binary.Read(file, binary.BigEndian, &barchivo)
+
+					for j := 0; j < 64; j++ {
+						if barchivo.B_content[j] != 0 {
+							contenido = append(contenido, barchivo.B_content[j])
+
+						}
+					}
+
+				}
+			}
+
+			uidaux := 0
+			encontrado := false
+			punteroL := 0 //Puntero de inicio de linea
+			lineas := strings.Split(string(contenido[:]), "\n")
+
+			lineas = lineas[:len(lineas)-1] //Por el salto de línea al final, elimino el último elemento
+			for len(lineas) > 0 {
+				linea := strings.Split(lineas[0], ",")
+				for len(linea) > 0 {
+					uidaux, _ = strconv.Atoi(string(linea[0]))
+					linea = linea[1:]
+					if linea[0] == "G" {
+						linea = nil //Si es un grupo, salto la línea
+					} else {
+						//Estoy leyendo un usuario
+
+						if uidaux != 0 { //Si el usuario no ha sido eliminado
+
+							linea = linea[1:] //Gripo
+							linea = linea[1:] //usuario
+							if linea[0] == name {
+								encontrado = true
+								linea = nil
+
+							}
+
+							//linea = linea[1:]
+							//Leo la contraseña
+
+						} else {
+							linea = nil
+						}
+						linea = nil
+
+					}
+					linea = nil
+
+				}
+				if encontrado {
+					break
+				}
+				punteroL += len(lineas[0]) + 1 //Sumo 1 por el salto de línea perdido
+				lineas = lineas[1:]
+			}
+
+			if encontrado {
+				var block = 0 //Bloque que se va a modificar
+				punteroOr := punteroL
+				if punteroL >= 64 {
+					block = int(math.Round(float64(punteroL / 64)))
+					punteroL = punteroL - ((block) * 64)
+
+				}
+				//Leo el bloque correcto
+				file.Seek(int64(inodo.I_block[block]), 0)
+				binary.Read(file, binary.BigEndian, &barchivo)
+
+				if contenido[punteroOr+1] == ',' {
+					barchivo.B_content[punteroL] = '0'
+				} else {
+					barchivo.B_content[punteroL] = '0'
+					barchivo.B_content[punteroL+1] = '0'
+				}
+				//Actualizo el bloque de archivos
+				file.Seek(int64(inodo.I_block[block]), 0)
+				binary.Write(file, binary.BigEndian, &barchivo)
+
+				consola += "¡Grupo eliminado con éxito!\n"
+
+			} else {
+				consola += "Error: No se encontró el grupo <" + name + ">\n"
+			}
+
+		} else {
+			consola += "Error: Acción no disponible para el usuario actual\n"
+		}
+
+	} else {
+		consola += "Error: No existe una sesión iniciada\n"
+	}
+
+}
+
+func rmusr(parametros []string) {
+	fuser := false
+	var user string
+	for len(parametros) > 0 {
+		tmp := parametros[0]
+		tipo, valor := getTipoValor(tmp)
+		if tipo == ">name" {
+			valor = regresarEspacio(valor)
+			user = valor
+			fuser = true
+		} else if tipo[0] == '#' {
+			break
+		} else {
+			consola += "Error: Parámetro <" + valor + "> no válido\n"
+		}
+
+		parametros = parametros[1:]
+
+	}
+
+	if fuser {
+		eliminarUsuario(user)
+	} else {
+		consola += "Error: Faltan parámetros obligatorios\n"
+	}
+}
+
 func Analizar(lineas []string) string {
 	consola = ""            //Reestableciendo la consola cada vez que se llama a analizar
 	Reportes.Reportes = nil //Reestablesco la lista de reportes
@@ -2813,6 +2959,9 @@ func Analizar(lineas []string) string {
 		} else if strings.EqualFold(params[0], "mkusr") {
 			params = params[1:]
 			mkusr(params)
+		} else if strings.EqualFold(params[0], "rmusr") {
+			params = params[1:]
+			rmusr(params)
 		} else if params[0][0] == '#' {
 
 			//Si es un comentario, no pasa nada
