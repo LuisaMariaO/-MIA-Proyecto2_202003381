@@ -2930,8 +2930,8 @@ func crearArchivo(ruta string, r bool, size int, cont string) {
 		binary.Read(file, binary.BigEndian, &superbloque)
 
 		//Muevo el puntero al inicio de los inodos, para buscar el inodo raiz
-		posinodo := 0  //Posición en el disco del inodo de carpeta donde será escrito el nuevo archivo
-		posbloque := 0 //Posición en el disco del bloque de carpeta que contiene al nuevo archivo
+		posinodo := 0 //Posición en el disco del inodo de carpeta donde será escrito el nuevo archivo
+
 		file.Seek(int64(superbloque.S_inode_start), 0)
 		posinodo = int(superbloque.S_inode_start)
 		var inodo Inodo
@@ -3012,10 +3012,14 @@ func crearArchivo(ruta string, r bool, size int, cont string) {
 			}
 			fmt.Println("listo", padre, nombreArchivo)
 			/*Ahora obtengo el contenido del archivo*/
+
 			contenido := ""
 			if len(cont) > 0 {
 				//Dandole prioridad al parámetro cont
-				filecont, _ := os.Open(cont)
+				filecont, err := os.Open(cont)
+				if err != nil {
+					consola += "Error: No se encontró el archivo de contenido \n"
+				}
 
 				defer filecont.Close()
 				reader := bufio.NewReader(filecont)
@@ -3038,103 +3042,144 @@ func crearArchivo(ruta string, r bool, size int, cont string) {
 				//Si se van a crear carpetas padre
 			} else {
 				if len(lista_ruta) == 0 {
-					//Se crea el archivo
+					//Ahora que encontré la carpeta, creo el inodo y bloque correspondientes
+					poscarpeta := 0
+
+					//Busco en el inodo de carpeta un espacio para el nuevo inodo
 					for i := 0; i <= 15; i++ {
-						//Busco espacio en los bloques de carpeta del inodo
+
 						if inodo.I_block[i] != 0 {
 							file.Seek(int64(inodo.I_block[i]), 0)
 							binary.Read(file, binary.BigEndian, &carpeta)
-							posbloque = int(inodo.I_block[i])
-							for j := 0; i < 4; j++ {
-								if carpeta.B_content[j].B_name[0] == 0 {
-									//Si hay espacio en este bloque, lo tomo
-									pos = j
-									copy(carpeta.B_content[j].B_name[:], []byte(nombreArchivo))
 
+							poscarpeta = int(inodo.I_block[i])
+
+							//Busco espacio
+							var nombreVacio [12]byte
+							for j := 0; j < 4; j++ {
+								if (carpeta.B_content[j].B_name == nombreVacio) && (carpeta.B_content[j].B_inodo == 0) {
+									//Si está vacío, lo ocupo
+									copy(carpeta.B_content[j].B_name[:], []byte(nombreArchivo))
+									pos = j
+									i = 15
 									break
+
 								}
 							}
 						} else {
-							//Si ya llegué a un bloque vacío y no he encontrado lugar, creo un blque nuevo
+							//Creo una nueva carpeta
+
 							var carpetanueva BloqueCarpetas
 							carpeta = carpetanueva
-							pos = 0
-							copy(carpeta.B_content[0].B_name[:], []byte(nombreArchivo))
-							/*Asocio el inodo a este nuevo bloque de carpeta*/
-							//Encuentro la posición del nuevo bloque
-							var bm byte
-							var uno byte = '1'
-							block := 0
-							file.Seek(int64(superbloque.S_bm_block_start), 0)
-							for k := 0; k < int(superbloque.S_blocks_count); k++ {
-								binary.Read(file, binary.BigEndian, &bm)
-								if bm == '1' {
-									block++
-								} else {
-									file.Seek(int64(superbloque.S_bm_block_start)+int64(k), 0)
-									break
-								}
-							}
-							binary.Write(file, binary.BigEndian, &uno)                                                //Actualizo el bitmap de bloques
-							inodo.I_block[i] = superbloque.S_block_start + int32(block*int(superbloque.S_block_size)) //Asocio el inodo con el nuevo bloque
-							posbloque = int(superbloque.S_block_start) + int((block)*int(superbloque.S_block_size))
-							//Escribo los cambios en el inodo actual
+
+							/*Acá debo asociar el inodo con el nuevo bloque y escribir el nuevo bloque,
+							además de actualizar el superbloque y el bitmap de bloques*/
+
+							inodo.I_block[i] = superbloque.S_first_blo
+							file.Seek(int64(superbloque.S_first_blo), 0)
+							binary.Write(file, binary.BigEndian, &carpeta)
+
+							poscarpeta = int(superbloque.S_first_blo)
+
 							file.Seek(int64(posinodo), 0)
 							binary.Write(file, binary.BigEndian, &inodo)
 
-							//Escribo el nuevo bloque
-							file.Seek(int64(posbloque), 0)
-							binary.Write(file, binary.BigEndian, &carpeta)
+							superbloque.S_free_blocks_count--
+							superbloque.S_first_blo += superbloque.S_block_size
 
+							var registro byte
+							var uno byte = '1'
+							file.Seek(int64(superbloque.S_bm_block_start), 0)
+
+							for i := 0; i < int(superbloque.S_blocks_count); i++ {
+								binary.Read(file, binary.BigEndian, &registro)
+								if registro == '0' {
+									file.Seek(int64(superbloque.S_bm_block_start)+int64(i), 0)
+									break //Si ya encontré el espacio libre, me detengo
+								}
+							}
+							binary.Write(file, binary.BigEndian, &uno)
+							copy(carpeta.B_content[0].B_name[:], []byte(nombreArchivo))
+
+							pos = 0
+							i = 15
 						}
+
 					}
-					//Ahora ya puedo crear el inodo de archivo nuevo
-					var inodonuevo Inodo
+
+					//Busco el primer inodo libre
+					file.Seek(int64(superbloque.S_first_ino), 0)
+
+					var nuevoi Inodo
 					uid, _ := strconv.Atoi(uidLog)
-					inodonuevo.I_uid = int32(uid)
-					inodonuevo.I_size = int32(len(contenido))
+					nuevoi.I_uid = int32(uid)
+					nuevoi.I_gid = 1
 					t := time.Now()
 					fecha := fmt.Sprintf("%d-%02d-%02dT%02d:%02d:%02d",
 						t.Year(), t.Month(), t.Day(),
 						t.Hour(), t.Minute(), t.Second())
-					copy(inodo.I_atime[:], []byte(fecha))
-					copy(inodo.I_ctime[:], []byte(fecha))
-					copy(inodo.I_mtime[:], []byte(fecha))
-					inodo.I_type = '1' //Es un archivo
-					inodo.I_perm = 664
-					superbloque.S_free_inodes_count--
-					superbloque.S_first_ino -= int32(superbloque.S_inode_size)
-					//Busco espacio en el bitmap de bloques
-					var bm byte
-					var uno byte
-					posbloquebm := 0
-					file.Seek(int64(superbloque.S_bm_block_start), 0)
-					for i := 0; i < int(superbloque.S_blocks_count); i++ {
-						binary.Read(file, binary.BigEndian, &bm)
-						if bm == '1' {
-							posbloquebm++
-						} else {
-							file.Seek(int64(superbloque.S_bm_block_start)+int64(i), 0)
-							break
+					copy(nuevoi.I_ctime[:], []byte(fecha))
+					copy(nuevoi.I_mtime[:], []byte(fecha))
+
+					nuevoi.I_type = '1' //Tipo archivo
+					nuevoi.I_perm = 664
+					//Cambio el bitmap de inodos
+					file.Seek(int64(superbloque.S_bm_inode_start), 0)
+
+					var registro byte
+					var uno byte = '1'
+					for i := 0; i < int(superbloque.S_inodes_count); i++ {
+						binary.Read(file, binary.BigEndian, &registro)
+
+						if registro == '0' {
+							file.Seek(int64(superbloque.S_bm_inode_start)+int64(i), 0)
+
+							break //Si ya encontré el espacio libre, me detengo
+
 						}
 					}
 					binary.Write(file, binary.BigEndian, &uno)
-					//Creo un bloque de archivo para guardar el contenido
-					var barchivo BloqueArchivos
-					puntero := 0
-					bloques := 0
+					var archivonuevo BloqueArchivos
+
+					//Escribo el primer bloque que de archivos y lo asocio con el inodo
+					contblo := 0
+					file.Seek(int64(superbloque.S_bm_block_start), 0)
+					for i := 0; i < int(superbloque.S_blocks_count); i++ {
+						binary.Read(file, binary.BigEndian, &registro)
+
+						if registro == '0' {
+							file.Seek(int64(superbloque.S_bm_block_start)+int64(i), 0)
+
+							break //Si ya encontré el espacio libre, me detengo
+
+						} else {
+
+						}
+					}
+					binary.Write(file, binary.BigEndian, uno)
+					nuevoi.I_block[0] = superbloque.S_first_blo
+					file.Seek(int64(nuevoi.I_block[0]), 0)
+					binary.Write(file, binary.BigEndian, &archivonuevo)
+					superbloque.S_free_blocks_count--
+					superbloque.S_first_blo += superbloque.S_block_size
+					nuevoi.I_size = int32(len(contenido))
+
+					var barchivo2 BloqueArchivos
 					nuevoBloque := false
+					puntero := 0
+					var bm byte
+					fmt.Println(contenido)
 					for _, char := range []byte(contenido) {
 						if puntero == 64 {
-							//Si el puntero es 64, hay que utilizar otro bloque
 							//Escribo los cambios en el bloque actual
-							file.Seek(int64(inodonuevo.I_block[bloques]), 0)
-							binary.Write(file, binary.BigEndian, &barchivo)
+							file.Seek(int64(nuevoi.I_block[contblo]), 0)
+							binary.Write(file, binary.BigEndian, &archivonuevo)
 
+							archivonuevo = barchivo2
 							nuevoBloque = true
 							puntero = 0
-							bloques++
-							inodonuevo.I_block[bloques] = superbloque.S_block_start + int32((int32((posbloquebm + 1)) * int32(unsafe.Sizeof(BloqueArchivos{}))))
+							contblo++
+							nuevoi.I_block[contblo] = superbloque.S_first_blo
 
 							//Actualizando el bitmap de bloques
 							var uno byte = '1'
@@ -3149,19 +3194,18 @@ func crearArchivo(ruta string, r bool, size int, cont string) {
 								}
 							}
 							binary.Write(file, binary.BigEndian, uno)
+							superbloque.S_free_blocks_count -= 1
+							superbloque.S_first_blo += int32(unsafe.Sizeof(BloqueArchivos{}))
 						}
-						barchivo.B_content[puntero] = char
+						archivonuevo.B_content[puntero] = char
 						puntero++
-
 					}
 
 					if nuevoBloque {
-						superbloque.S_free_blocks_count -= 1
-						superbloque.S_first_blo += int32(unsafe.Sizeof(BloqueArchivos{}))
 
 						//Escribo el nuevo bloque
-						file.Seek(int64(inodo.I_block[bloques]), 0)
-						binary.Write(file, binary.BigEndian, &barchivo)
+						file.Seek(int64(nuevoi.I_block[contblo]), 0)
+						binary.Write(file, binary.BigEndian, &archivonuevo)
 
 						//Actualizo el superbloque
 						file.Seek(int64(montadas[idLog].inicio), 0)
@@ -3169,25 +3213,29 @@ func crearArchivo(ruta string, r bool, size int, cont string) {
 
 					} else {
 						//Actualizo el bloque de archivos
-						file.Seek(int64(inodo.I_block[bloques]), 0)
-						binary.Write(file, binary.BigEndian, &barchivo)
+						file.Seek(int64(nuevoi.I_block[0]), 0)
+						binary.Write(file, binary.BigEndian, &archivonuevo)
 					}
-					//Escribo el nuevo inodo
 
-					posinodobm := 0
-					file.Seek(int64(superbloque.S_bm_inode_start), 0)
-					for i := 0; i < int(superbloque.S_inodes_count); i++ {
-						binary.Read(file, binary.BigEndian, &bm)
-						if bm == '1' {
-							posinodobm++
-						} else {
-							file.Seek(int64(superbloque.S_bm_inode_start)+int64(i), 0)
-							break
-						}
-					}
-					binary.Write(file, binary.BigEndian, &uno)
-					file.Seek(int64(superbloque.S_inode_start)+int64(posinodobm*int(superbloque.S_inode_size)), 0)
-					consola += "¡Archivo creado con éxito!\n"
+					//Asocio la carpeta padre con el nuevo inodo
+
+					carpeta.B_content[pos].B_inodo = superbloque.S_first_ino
+					//Escribo la carpeta modificada
+					file.Seek(int64(poscarpeta), 0)
+					binary.Write(file, binary.BigEndian, &carpeta)
+
+					//Asocio el inodo con el archivo nuevo
+
+					file.Seek(int64(superbloque.S_first_ino), 0) //Escribo el nuevo inodo
+					binary.Write(file, binary.BigEndian, &nuevoi)
+
+					superbloque.S_free_inodes_count--                   //Disminuyo los inodos libres
+					superbloque.S_first_ino += superbloque.S_inode_size //Actualizo la posición del primer inodo libre
+
+					file.Seek(int64(montadas[idLog].inicio), 0)
+					binary.Write(file, binary.BigEndian, &superbloque)
+
+					consola += "¡Archivo creado con exito!\n"
 
 				} else {
 					consola += "Error: No se encontró el directorio del archivo\n"
