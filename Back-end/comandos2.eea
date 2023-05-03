@@ -1,3 +1,4 @@
 mount >path=/home/luisa/parte2/disco.dsk >name=Part1 #id 811A
 login >id=811A >user=root >pwd=123
 mkfile >path=/carpetita >cont=/home/luisa/contenido.txt
+rep >id=811A >path="/home/luisa/parte2/inicial/treeA.png" >name=tree
